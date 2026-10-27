@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Register, SessionMeasureInput } from 'claude-code'
+import type { EngineInterface, Register, SessionMeasureInput } from 'claude-code'
 
 import type { Usage } from '../types'
 
@@ -45,6 +45,44 @@ const toUsage = (m: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>
   }
 }
 
+type Limits = Pick<Usage, 'fiveHour' | 'fiveHourResetsAt' | 'week' | 'weekResetsAt'>
+const LIMITS_KEY = 'limits'
+
+// Limits are account-wide but only arrive with an API reply, so a new or reopened thread
+// starts from the last ones seen in any session. A window whose reset has passed starts at 0.
+async function withLimits($: EngineInterface, u: Usage, now: number): Promise<Usage> {
+  if (u.fiveHour !== undefined || u.week !== undefined) {
+    const limits: Limits = { fiveHour: u.fiveHour, fiveHourResetsAt: u.fiveHourResetsAt, week: u.week, weekResetsAt: u.weekResetsAt }
+    await $.store.set(LIMITS_KEY, limits)
+    return u
+  }
+  const saved = (await $.store.get(LIMITS_KEY)) as Limits | undefined
+  if (!saved) return u
+  const expired = (at?: string) => at !== undefined && Date.parse(at) <= now
+  return {
+    ...u,
+    fiveHour: expired(saved.fiveHourResetsAt) ? 0 : saved.fiveHour,
+    fiveHourResetsAt: expired(saved.fiveHourResetsAt) ? undefined : saved.fiveHourResetsAt,
+    week: expired(saved.weekResetsAt) ? 0 : saved.week,
+    weekResetsAt: expired(saved.weekResetsAt) ? undefined : saved.weekResetsAt,
+  }
+}
+
+// Each thread's last activity, by session id, so a reopened thread shows its cache age at once.
+const ACTIVITY_KEY = 'lastActivity'
+const ACTIVITY_KEEP = 200
+
+async function saveActivity($: EngineInterface, at: number) {
+  await update($, lastActivity, () => at)
+  const id = await $.session.id()
+  const all = ((await $.store.get(ACTIVITY_KEY)) ?? {}) as Record<string, number>
+  delete all[id]
+  all[id] = at
+  const ids = Object.keys(all)
+  for (const old of ids.slice(0, Math.max(0, ids.length - ACTIVITY_KEEP))) delete all[old]
+  await $.store.set(ACTIVITY_KEY, all)
+}
+
 function untilReset(resetsAt: string | undefined, now: number): string {
   if (!resetsAt) return ''
   const mins = Math.max(0, Math.round((Date.parse(resetsAt) - now) / 60000))
@@ -68,18 +106,20 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     const full = await $.session.usage({ breakdown: 'summary' })
-    const u = toUsage(full, full.context.breakdown?.rawMaxTokens)
+    const u = await withLimits($, toUsage(full, full.context.breakdown?.rawMaxTokens), await $.clock.now())
     await update($, usage, () => u)
+    if ((await read($, lastActivity)) === null) {
+      const saved = ((await $.store.get(ACTIVITY_KEY)) ?? {}) as Record<string, number>
+      const at = saved[await $.session.id()]
+      if (at !== undefined) await update($, lastActivity, () => at)
+    }
     $.clock.every(60_000, async () => {
       await update($, tick, n => n + 1)
       const last = await read($, lastActivity)
       const tokens = (await read($, usage)).contextTokens ?? 0
       const mins = last === null ? 0 : Math.floor(((await $.clock.now()) - last) / 60_000)
       if (mins === CACHE_COOLING_MIN && tokens >= COLD_PROMPT_MIN_TOKENS) {
-        const message = `Cache cools in ${CACHE_COLD_MIN - mins} min. Stepping away? Run /handoff now while it's cheap.`
-        $.ui.toast(message)
-        // Reaches the phone when Remote Control is on; skipped while the person is at the screen.
-        await $.tool.call({ tool: 'PushNotification', message, status: 'proactive' }).catch(() => undefined)
+        $.ui.toast(`Cache cools in ${CACHE_COLD_MIN - mins} min. Stepping away? Run /handoff now while it's cheap.`)
       }
     })
     return result
@@ -88,7 +128,7 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     const now = await $.clock.now()
     const last = await read($, lastActivity)
-    await update($, lastActivity, () => now)
+    await saveActivity($, now)
 
     // Cold cache + big context: the next message re-reads it all at full price.
     const isColdReturn = !e.isMeta && !e.command && last !== null && now - last >= CACHE_COLD_MIN * 60_000
@@ -114,15 +154,14 @@ export const register: Register = on => {
   })
 
   on('turn.complete', async ($, e, next) => {
-    const now = await $.clock.now()
-    await update($, lastActivity, () => now)
+    await saveActivity($, await $.clock.now())
     return next(e)
   })
 
   on('session.measure', async ($, e, next) => {
     // `summary` estimates locally: no API call.
     const compactAt = (await $.session.usage({ breakdown: 'summary' })).context.breakdown?.rawMaxTokens
-    const u = toUsage(e, compactAt)
+    const u = await withLimits($, toUsage(e, compactAt), await $.clock.now())
     await update($, usage, () => u)
     for (const level of CONTEXT_WARN) {
       if ((u.contextPct ?? 0) >= level && !warned.has(`c${level}`)) {
