@@ -244,8 +244,7 @@ export const register: Register = on => {
     return (
       // No background of our own: the desktop draws the band's card and a fill here showed as a strip inside it.
       <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0}>
-        {/* The meters give way first, wrapping to a second line in a narrow window, so HANDOFF stays on screen and none is cut off. */}
-        <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap="lg" rowGap="sm" flexGrow={1} flexShrink={1} minWidth={0}>
+        <Box flexDirection="row" alignItems="center" gap="lg" flexGrow={1}>
           <Text mono weight="bold" color={LABEL}>USAGE</Text>
           {meter('five', '5H', u.fiveHour, undefined, FIVE_HOUR)}
           {meter('week', '7D', u.week, undefined, WEEK)}
@@ -254,11 +253,9 @@ export const register: Register = on => {
         </Box>
         {/* Runs the installed handoff command, as typing it + Return would. */}
         {/* The desktop draws a Button's frame its own way; the label's style is ours. */}
-        <Box flexShrink={0}>
-          <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
-            <Text mono weight="bold" color={CONTEXT}>HANDOFF</Text>
-          </Button>
-        </Box>
+        <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
+          <Text mono weight="bold" color={CONTEXT}>HANDOFF</Text>
+        </Button>
       </Box>
     )
   })
