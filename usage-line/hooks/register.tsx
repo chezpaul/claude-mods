@@ -31,11 +31,13 @@ const CACHE_COLD_MIN = 60
 const COLD_PROMPT_MIN_TOKENS = 50_000
 
 // A handoff skill may be installed bare (`handoff`) or namespaced by a plugin or synced account (`anthropic-skills:handoff`).
+// Skills synced from claude.ai may be missing from the list, so the account's namespace is tried last.
+const HANDOFF_FALLBACK = 'anthropic-skills:handoff'
 const runHandoff = async ($: EngineInterface) => {
   const names = (await $.command.list()).map(c => c.name)
-  const command = names.find(n => n === 'handoff') ?? names.find(n => n.endsWith(':handoff'))
-  if (command) await $.command.run({ command })
-  else $.ui.toast('No handoff skill or command installed.')
+  const command =
+    names.find(n => n === 'handoff') ?? names.find(n => n === HANDOFF_FALLBACK) ?? names.find(n => n.toLowerCase().endsWith(':handoff')) ?? HANDOFF_FALLBACK
+  await $.command.run({ command }).catch(() => $.ui.toast('No handoff skill or command installed.'))
 }
 
 // `compactAt` is the window auto-compaction measures against (what the app's Context % uses), smaller than the model's.
