@@ -13,7 +13,6 @@ const CONTEXT_WARN = [40, 60, 80]
 const FIVE_HOUR_WARN = [50, 75, 90]
 
 // Band palette.
-const BAND_BG = '#24221e'
 const LABEL = '#ece8df'
 const MUTED = '#8c877d'
 const WEEK = '#e07b39'
@@ -243,8 +242,9 @@ export const register: Register = on => {
     }
 
     return (
-      <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0} backgroundColor={BAND_BG}>
-        <Box flexDirection="row" alignItems="center" gap="lg" flexGrow={1}>
+      <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0}>
+        {/* When the row is too wide, the meters clip at the right so HANDOFF stays on screen. */}
+        <Box flexDirection="row" alignItems="center" gap="lg" flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
           <Text mono weight="bold" color={LABEL}>USAGE</Text>
           {meter('five', '5H', u.fiveHour, undefined, FIVE_HOUR)}
           {meter('week', '7D', u.week, undefined, WEEK)}
@@ -253,9 +253,11 @@ export const register: Register = on => {
         </Box>
         {/* Runs the installed handoff command, as typing it + Return would. */}
         {/* The desktop draws a Button's frame its own way; the label's style is ours. */}
-        <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
-          <Text mono weight="bold" color={CONTEXT}>HANDOFF</Text>
-        </Button>
+        <Box flexShrink={0}>
+          <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
+            <Text mono weight="bold" color={CONTEXT}>HANDOFF</Text>
+          </Button>
+        </Box>
       </Box>
     )
   })
