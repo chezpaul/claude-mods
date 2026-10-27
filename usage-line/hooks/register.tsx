@@ -244,8 +244,8 @@ export const register: Register = on => {
     return (
       // No background of our own: the desktop draws the band's card and a fill here showed as a strip inside it.
       <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0}>
-        {/* The meters give way first, so HANDOFF stays on screen in a narrow window. */}
-        <Box flexDirection="row" alignItems="center" gap="lg" flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
+        {/* The meters give way first, wrapping to a second line in a narrow window, so HANDOFF stays on screen and none is cut off. */}
+        <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap="lg" rowGap="sm" flexGrow={1} flexShrink={1} minWidth={0}>
           <Text mono weight="bold" color={LABEL}>USAGE</Text>
           {meter('five', '5H', u.fiveHour, undefined, FIVE_HOUR)}
           {meter('week', '7D', u.week, undefined, WEEK)}
