@@ -21,6 +21,8 @@ const CONTEXT = '#7fb8d6'
 const WARM = '#7cbf6a'
 const COOLING = '#5fb8b0'
 const COLD = '#5b9bf0'
+// Few enough that all four meters and HANDOFF fit on one line in the band.
+const DOTS = 6
 
 // Pro's prompt cache lives about an hour; warn a bit before.
 const CACHE_COOLING_MIN = 45
@@ -207,13 +209,20 @@ export const register: Register = on => {
     const last = await read($, lastActivity)
     const { Box, Button, Text } = $.ui.resolve(e)
 
-    const meter = (key: string, label: string, used: number | undefined, color: string) => {
+    const meter = (key: string, label: string, used: number | undefined, resetsAt: string | undefined, color: string) => {
       if (used === undefined) return null
       const pct = Math.min(100, Math.max(0, Math.round(used)))
+      const filled = Math.round((pct / 100) * DOTS)
+      const reset = untilReset(resetsAt, now)
       return (
         <Box key={key} flexDirection="row" alignItems="center" gap="xs" flexShrink={0}>
           <Text mono weight="semibold" color={MUTED}>{label}</Text>
+          <Text mono>
+            <Text color={color}>{'●'.repeat(filled)}</Text>
+            <Text color={MUTED}>{'·'.repeat(DOTS - filled)}</Text>
+          </Text>
           <Text mono weight="bold" color={color}>{pct}%</Text>
+          {reset ? <Text mono color={MUTED}>· {reset}</Text> : null}
         </Box>
       )
     }
@@ -238,10 +247,10 @@ export const register: Register = on => {
       <Box flexDirection="row" flexWrap="nowrap" alignItems="center" gap="md" paddingX="md" paddingY={0}>
         <Box flexDirection="row" flexWrap="nowrap" alignItems="center" gap="md" flexGrow={1}>
           <Text mono weight="bold" color={LABEL}>USAGE</Text>
-          {meter('five', '5H', u.fiveHour, FIVE_HOUR)}
-          {meter('week', '7D', u.week, WEEK)}
+          {meter('five', '5H', u.fiveHour, undefined, FIVE_HOUR)}
+          {meter('week', '7D', u.week, undefined, WEEK)}
           {cache}
-          {meter('ctx', 'CTX', u.contextPct, CONTEXT)}
+          {meter('ctx', 'CTX', u.contextPct, undefined, CONTEXT)}
         </Box>
         {/* Runs the installed handoff command, as typing it + Return would. */}
         {/* The desktop draws a Button's frame its own way; the label's style is ours. */}
