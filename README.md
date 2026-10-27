@@ -4,7 +4,7 @@ Mods for Claude Code (terminal and the desktop app's Code tab).
 
 | Mod | What it does |
 | --- | --- |
-| [usage-line](./usage-line) | Usage strip above the prompt: 5-hour and weekly limits with reset countdowns, prompt-cache age (Warm / Cooling / Cold), and context use. Pops up a warning when a session's context or cost gets high. |
+| [usage-line](./usage-line) | Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age (Warm / Cooling / Cold), and context use. Pops up a warning when a session's context or cost gets high. |
 
 ## Install
 
@@ -27,10 +27,11 @@ Answer `y` to add the marketplace, then pick the user scope so it loads in every
 ## usage-line
 
 ```
-USAGE   5H ●●●●●●···· 59% · 1h 52m   7D ●●●●······ 38% · 3d 4h   CACHE Warm · 3m   CTX ●●●······· 28%
+USAGE   5H ●●●●●●···· 59%   7D ●●●●······ 38%   CACHE Warm · 3m   CTX ●●●······· 28%   HANDOFF
 ```
 
-- **5H / 7D**: share of your 5-hour and weekly limits used, and time until each resets.
+- **5H / 7D**: share of your 5-hour and weekly limits used.
+- **HANDOFF** (right end): runs `/handoff`. Needs a `handoff` skill or command installed.
 - **CACHE**: minutes since the last message. Warm under 45 min, Cooling to 60, Cold after: the prompt cache has likely expired, so the next message re-reads the whole chat at full price. Consider a fresh session.
 - **CTX**: how full the context window is; every message re-reads it.
 - **Cold-cache catcher**: at 45 min idle (chat over 50k tokens) it reminds you to `/handoff` while that's still cheap (also pushed to your phone when the session has Remote Control on). Send a message once the cache is Cold and it asks first: *Send anyway* or *Start fresh instead* (drops the message so you can `/clear` and restate it; a handoff at that point would re-read the cold chat too).

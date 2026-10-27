@@ -47,3 +47,22 @@ test('at 45 idle minutes in a big chat, a push goes out once', async ($, on) => 
   expect(pushes.length).toBe(1)
   expect(pushes[0]).toContain('/handoff')
 })
+
+test('the Handoff button runs /handoff', async ($, on) => {
+  mock.clock(on)
+  const sent: string[] = []
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: { ...USAGE, rateLimits: [{ kind: 'five_hour', percentUsed: 20 }] } }))
+  on('command.run', (_, e) => (sent.push(e.command), { text: '' }))
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({
+    plugin: 'usage-line',
+    surface: 'desktop',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 9 } },
+  })
+  await ui.press({ key: 'handoff' })
+  expect(sent).toEqual(['handoff'])
+  await ui.unmount()
+})

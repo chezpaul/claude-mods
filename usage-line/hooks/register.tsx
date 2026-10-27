@@ -156,7 +156,7 @@ export const register: Register = on => {
     const now = await $.clock.now()
     await read($, tick)
     const last = await read($, lastActivity)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
 
     const meter = (key: string, label: string, used: number | undefined, resetsAt: string | undefined, color: string) => {
       if (used === undefined) return null
@@ -186,18 +186,25 @@ export const register: Register = on => {
         <Box key="cache" flexDirection="row" alignItems="center" gap="sm">
           <Text mono weight="semibold" color={MUTED}>CACHE</Text>
           <Text mono weight="bold" color={color}>{state}</Text>
-          <Text mono color={MUTED}>· {age}</Text>
+          <Text mono color={MUTED} wrap="truncate">{`·\u00a0${age}`}</Text>
         </Box>
       )
     }
 
     return (
       <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0} backgroundColor={BAND_BG}>
-        <Text mono weight="bold" color={LABEL}>USAGE</Text>
-        {meter('five', '5H', u.fiveHour, u.fiveHourResetsAt, FIVE_HOUR)}
-        {meter('week', '7D', u.week, undefined, WEEK)}
-        {cache}
-        {meter('ctx', 'CTX', u.contextPct, undefined, CONTEXT)}
+        <Box flexDirection="row" alignItems="center" gap="lg" flexGrow={1}>
+          <Text mono weight="bold" color={LABEL}>USAGE</Text>
+          {meter('five', '5H', u.fiveHour, undefined, FIVE_HOUR)}
+          {meter('week', '7D', u.week, undefined, WEEK)}
+          {cache}
+          {meter('ctx', 'CTX', u.contextPct, undefined, CONTEXT)}
+        </Box>
+        {/* Runs /handoff, as typing it + Return would. */}
+        {/* The desktop draws a Button's frame its own way; the label's style is ours. */}
+        <Button key="handoff" label="HANDOFF" onPress={() => void $.command.run({ command: 'handoff' })}>
+          <Text mono weight="bold" color={CONTEXT}>HANDOFF</Text>
+        </Button>
       </Box>
     )
   })
