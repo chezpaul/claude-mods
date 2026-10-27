@@ -1,0 +1,7 @@
+{
+  "name": "claude-mods",
+  "owner": { "name": "chezpaul" },
+  "plugins": [
+    { "name": "usage-line", "source": "./usage-line", "description": "Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age, context use" }
+  ]
+}
