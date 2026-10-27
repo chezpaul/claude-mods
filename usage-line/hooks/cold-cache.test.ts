@@ -51,7 +51,7 @@ test('at 45 idle minutes in a big chat, a toast shows once and nothing is pushed
   expect(pushes.length).toBe(0)
 })
 
-test('the Handoff button runs /handoff', async ($, on) => {
+test('the Handoff button runs a namespaced handoff skill', async ($, on) => {
   mock.clock(on)
   mock.store(on)
   const sent: string[] = []
@@ -59,6 +59,10 @@ test('the Handoff button runs /handoff', async ($, on) => {
   on('session.id', () => ({ value: 's1' }))
   on('session.usage', () => ({ value: { ...USAGE, rateLimits: [{ kind: 'five_hour', percentUsed: 20 }] } }))
   on('command.run', (_, e) => (sent.push(e.command), { text: '' }))
+  on('command.list', () => ({ value: [
+    { name: 'clear', description: '', source: 'builtin' },
+    { name: 'anthropic-skills:handoff', description: '', source: 'plugin' },
+  ] }))
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({
@@ -68,7 +72,7 @@ test('the Handoff button runs /handoff', async ($, on) => {
     props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 9 } },
   })
   await ui.press({ key: 'handoff' })
-  expect(sent).toEqual(['handoff'])
+  expect(sent).toEqual(['anthropic-skills:handoff'])
   await ui.unmount()
 })
 

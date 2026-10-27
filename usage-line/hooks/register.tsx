@@ -30,6 +30,14 @@ const CACHE_COLD_MIN = 60
 // Below this a cold re-read is cheap enough not to interrupt.
 const COLD_PROMPT_MIN_TOKENS = 50_000
 
+// A handoff skill may be installed bare (`handoff`) or namespaced by a plugin or synced account (`anthropic-skills:handoff`).
+const runHandoff = async ($: EngineInterface) => {
+  const names = (await $.command.list()).map(c => c.name)
+  const command = names.find(n => n === 'handoff') ?? names.find(n => n.endsWith(':handoff'))
+  if (command) await $.command.run({ command })
+  else $.ui.toast('No handoff skill or command installed.')
+}
+
 // `compactAt` is the window auto-compaction measures against (what the app's Context % uses), smaller than the model's.
 const toUsage = (m: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>, compactAt?: number): Usage => {
   const five = m.rateLimits.find(r => r.kind === 'five_hour')
@@ -243,9 +251,9 @@ export const register: Register = on => {
           {cache}
           {meter('ctx', 'CTX', u.contextPct, undefined, CONTEXT)}
         </Box>
-        {/* Runs /handoff, as typing it + Return would. */}
+        {/* Runs the installed handoff command, as typing it + Return would. */}
         {/* The desktop draws a Button's frame its own way; the label's style is ours. */}
-        <Button key="handoff" label="HANDOFF" onPress={() => void $.command.run({ command: 'handoff' })}>
+        <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
           <Text mono weight="bold" color={CONTEXT}>HANDOFF</Text>
         </Button>
       </Box>
