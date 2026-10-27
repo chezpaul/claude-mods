@@ -21,8 +21,7 @@ const CONTEXT = '#7fb8d6'
 const WARM = '#7cbf6a'
 const COOLING = '#5fb8b0'
 const COLD = '#5b9bf0'
-// Few enough that all four meters and HANDOFF fit on one line in the band.
-const DOTS = 6
+const DOTS = 10
 
 // Pro's prompt cache lives about an hour; warn a bit before.
 const CACHE_COOLING_MIN = 45
@@ -215,7 +214,7 @@ export const register: Register = on => {
       const filled = Math.round((pct / 100) * DOTS)
       const reset = untilReset(resetsAt, now)
       return (
-        <Box key={key} flexDirection="row" alignItems="center" gap="xs" flexShrink={0}>
+        <Box key={key} flexDirection="row" alignItems="center" gap="sm">
           <Text mono weight="semibold" color={MUTED}>{label}</Text>
           <Text mono>
             <Text color={color}>{'●'.repeat(filled)}</Text>
@@ -234,18 +233,18 @@ export const register: Register = on => {
       const color = state === 'Cold' ? COLD : state === 'Cooling' ? COOLING : WARM
       const age = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`
       cache = (
-        <Box key="cache" flexDirection="row" alignItems="center" gap="xs" flexShrink={0}>
+        <Box key="cache" flexDirection="row" alignItems="center" gap="sm">
           <Text mono weight="semibold" color={MUTED}>CACHE</Text>
           <Text mono weight="bold" color={color}>{state}</Text>
-          <Text mono color={MUTED}>{age}</Text>
+          <Text mono color={MUTED} wrap="truncate">{`·\u00a0${age}`}</Text>
         </Box>
       )
     }
 
     return (
       // No background of our own: the desktop draws the band's card and a fill here showed as a strip inside it.
-      <Box flexDirection="row" flexWrap="nowrap" alignItems="center" gap="md" paddingX="md" paddingY={0}>
-        <Box flexDirection="row" flexWrap="nowrap" alignItems="center" gap="md" flexGrow={1}>
+      <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0}>
+        <Box flexDirection="row" alignItems="center" gap="lg" flexGrow={1}>
           <Text mono weight="bold" color={LABEL}>USAGE</Text>
           {meter('five', '5H', u.fiveHour, undefined, FIVE_HOUR)}
           {meter('week', '7D', u.week, undefined, WEEK)}
@@ -254,11 +253,9 @@ export const register: Register = on => {
         </Box>
         {/* Runs the installed handoff command, as typing it + Return would. */}
         {/* The desktop draws a Button's frame its own way; the label's style is ours. */}
-        <Box flexShrink={0}>
-          <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
-            <Text mono weight="bold" color={CONTEXT}>HANDOFF</Text>
-          </Button>
-        </Box>
+        <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
+          <Text mono weight="bold" color={CONTEXT}>HANDOFF</Text>
+        </Button>
       </Box>
     )
   })
