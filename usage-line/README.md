@@ -43,7 +43,7 @@ Then restart Claude Code.
 ## usage-line
 
 ```
-USAGE   5H ●●●●●●···· 59%   7D ●●●●······ 38%   CACHE Warm · 3m   CTX ●●●······· 28%   HANDOFF
+USAGE  5H ●●●●·· 59%  7D ●●···· 38%  CACHE Warm · 3m  CTX ●●···· 28%  HANDOFF
 ```
 
 - **5H / 7D**: share of your 5-hour and weekly limits used.
