@@ -24,6 +24,22 @@ In the desktop app: click **+** next to the prompt box, then **Plugins**, **Add 
 
 Answer `y` to add the marketplace, then pick the user scope so it loads in every session. Needs a recent Claude Code (2.1.308 or later).
 
+## Updates
+
+Updates don't arrive on their own: Claude Code leaves auto-update off for marketplaces outside Anthropic's own. To turn it on once, run `/plugin` in a terminal session, open the **Marketplaces** tab, pick `claude-mods`, and choose **Enable auto-update**. New versions then download in the background after your first message, and load the next time you start a session.
+
+To update by hand instead:
+
+```bash
+claude plugin marketplace update claude-mods
+```
+
+```bash
+claude plugin update usage-line
+```
+
+Then restart Claude Code.
+
 ## usage-line
 
 ```
