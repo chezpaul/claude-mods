@@ -1,0 +1,49 @@
+import { expect, mock, test } from 'claude-code/testing'
+
+const USAGE = { startedAt: 0, context: { tokens: 300_000, window: 1_000_000, percent: 30 }, rateLimits: [] }
+
+test('a prompt after an hour with a big context asks first, and can be dropped', async ($, on) => {
+  const clock = mock.clock(on)
+  const asked: string[] = []
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('ui.toast', () => ({ value: undefined }))
+  // $.ui.ask is an AskUserQuestion tool call; answer it as the person would.
+  on('tool.call', { tool: 'AskUserQuestion' }, (_, e) => {
+    const question = e.questions[0].question
+    asked.push(question)
+    return { result: { questions: e.questions, answers: { [question]: 'Start fresh instead' } } }
+  })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.prompt.submit({ text: 'first' })
+  expect(asked.length).toBe(0)
+
+  await clock.advance(30 * 60_000)
+  await $.prompt.submit({ text: 'warm' })
+  expect(asked.length).toBe(0)
+
+  await clock.advance(61 * 60_000)
+  const result = await $.prompt.submit({ text: 'cold' })
+  expect(asked.length).toBe(1)
+  expect(result).toEqual({ drop: 'Cold cache: start fresh instead' })
+})
+
+test('at 45 idle minutes in a big chat, a push goes out once', async ($, on) => {
+  const clock = mock.clock(on)
+  const pushes: string[] = []
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({ value: USAGE }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  on('tool.call', { tool: 'PushNotification' }, (_, e) => (pushes.push(e.message), { result: {} }))
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.prompt.submit({ text: 'hi' })
+  await clock.advance(44 * 60_000)
+  expect(pushes.length).toBe(0)
+  await clock.advance(10 * 60_000)
+  expect(pushes.length).toBe(1)
+  expect(pushes[0]).toContain('/handoff')
+})

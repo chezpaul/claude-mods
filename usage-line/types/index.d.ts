@@ -4,6 +4,7 @@ export type Usage = {
   week?: number
   weekResetsAt?: string
   contextPct?: number
+  contextTokens?: number
   usd?: number
 }
 

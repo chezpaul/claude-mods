@@ -27,6 +27,8 @@ const DOTS = 10
 // Pro's prompt cache lives about an hour; warn a bit before.
 const CACHE_COOLING_MIN = 45
 const CACHE_COLD_MIN = 60
+// Below this a cold re-read is cheap enough not to interrupt.
+const COLD_PROMPT_MIN_TOKENS = 50_000
 
 const toUsage = (m: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>): Usage => {
   const five = m.rateLimits.find(r => r.kind === 'five_hour')
@@ -37,6 +39,7 @@ const toUsage = (m: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>
     week: week?.percentUsed,
     weekResetsAt: week?.resetsAt,
     contextPct: m.context.percent,
+    contextTokens: m.context.tokens,
     usd: m.cost?.usd,
   }
 }
@@ -65,13 +68,46 @@ export const register: Register = on => {
     const result = await next(e)
     const u = toUsage(await $.session.usage())
     await update($, usage, () => u)
-    $.clock.every(60_000, () => void update($, tick, n => n + 1))
+    $.clock.every(60_000, async () => {
+      await update($, tick, n => n + 1)
+      const last = await read($, lastActivity)
+      const tokens = (await read($, usage)).contextTokens ?? 0
+      const mins = last === null ? 0 : Math.floor(((await $.clock.now()) - last) / 60_000)
+      if (mins === CACHE_COOLING_MIN && tokens >= COLD_PROMPT_MIN_TOKENS) {
+        const message = `Cache cools in ${CACHE_COLD_MIN - mins} min. Stepping away? Run /handoff now while it's cheap.`
+        $.ui.toast(message)
+        // Reaches the phone when Remote Control is on; skipped while the person is at the screen.
+        await $.tool.call({ tool: 'PushNotification', message, status: 'proactive' }).catch(() => undefined)
+      }
+    })
     return result
   })
 
   on('prompt.submit', async ($, e, next) => {
     const now = await $.clock.now()
+    const last = await read($, lastActivity)
     await update($, lastActivity, () => now)
+
+    // Cold cache + big context: the next message re-reads it all at full price.
+    const isColdReturn = !e.isMeta && !e.command && last !== null && now - last >= CACHE_COLD_MIN * 60_000
+    if (isColdReturn) {
+      const tokens = (await $.session.usage()).context.tokens ?? 0
+      if (tokens >= COLD_PROMPT_MIN_TOKENS) {
+        const mins = Math.floor((now - last) / 60_000)
+        const away = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`
+        const choice = await $.ui
+          .ask(`Cache is cold (${away} since the last message). Sending re-reads ~${Math.round(tokens / 1000)}k tokens at full price. Send anyway?`, {
+            header: 'Cold cache',
+            options: ['Send anyway', 'Start fresh instead'],
+          })
+          .catch(() => 'Send anyway')
+        // /handoff here would itself re-read the cold chat, so the cheap way out is a fresh start.
+        if (choice === 'Start fresh instead') {
+          $.ui.toast('Not sent. Run /clear, then send your message with a few lines of context.')
+          return { drop: 'Cold cache: start fresh instead' }
+        }
+      }
+    }
     return next(e)
   })
 
