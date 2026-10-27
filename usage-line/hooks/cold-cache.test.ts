@@ -66,3 +66,24 @@ test('the Handoff button runs /handoff', async ($, on) => {
   expect(sent).toEqual(['handoff'])
   await ui.unmount()
 })
+
+test('CTX is measured against the compaction window, as the app shows it', async ($, on) => {
+  mock.clock(on)
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { tokens: 248_808, window: 1_000_000, percent: 25, breakdown: { rawMaxTokens: 400_000 } },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 16 }],
+    },
+  }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({
+    plugin: 'usage-line',
+    surface: 'desktop',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 9 } },
+  })
+  expect(await ui.find({ type: 'Text', text: '62%' })).toBeTruthy()
+  await ui.unmount()
+})

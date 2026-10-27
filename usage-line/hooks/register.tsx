@@ -30,7 +30,8 @@ const CACHE_COLD_MIN = 60
 // Below this a cold re-read is cheap enough not to interrupt.
 const COLD_PROMPT_MIN_TOKENS = 50_000
 
-const toUsage = (m: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>): Usage => {
+// `compactAt` is the window auto-compaction measures against (what the app's Context % uses), smaller than the model's.
+const toUsage = (m: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>, compactAt?: number): Usage => {
   const five = m.rateLimits.find(r => r.kind === 'five_hour')
   const week = m.rateLimits.find(r => r.kind === 'seven_day')
   return {
@@ -38,7 +39,7 @@ const toUsage = (m: Pick<SessionMeasureInput, 'context' | 'rateLimits' | 'cost'>
     fiveHourResetsAt: five?.resetsAt,
     week: week?.percentUsed,
     weekResetsAt: week?.resetsAt,
-    contextPct: m.context.percent,
+    contextPct: m.context.tokens !== undefined && compactAt ? Math.round((m.context.tokens / compactAt) * 100) : m.context.percent,
     contextTokens: m.context.tokens,
     usd: m.cost?.usd,
   }
@@ -66,7 +67,8 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    const u = toUsage(await $.session.usage())
+    const full = await $.session.usage({ breakdown: 'summary' })
+    const u = toUsage(full, full.context.breakdown?.rawMaxTokens)
     await update($, usage, () => u)
     $.clock.every(60_000, async () => {
       await update($, tick, n => n + 1)
@@ -118,7 +120,9 @@ export const register: Register = on => {
   })
 
   on('session.measure', async ($, e, next) => {
-    const u = toUsage(e)
+    // `summary` estimates locally: no API call.
+    const compactAt = (await $.session.usage({ breakdown: 'summary' })).context.breakdown?.rawMaxTokens
+    const u = toUsage(e, compactAt)
     await update($, usage, () => u)
     for (const level of CONTEXT_WARN) {
       if ((u.contextPct ?? 0) >= level && !warned.has(`c${level}`)) {
