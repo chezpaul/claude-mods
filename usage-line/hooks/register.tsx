@@ -13,6 +13,7 @@ const CONTEXT_WARN = [40, 60, 80]
 const FIVE_HOUR_WARN = [50, 75, 90]
 
 // Band palette.
+const BAND_BG = '#24221e'
 const LABEL = '#ece8df'
 const MUTED = '#8c877d'
 const WEEK = '#e07b39'
@@ -30,13 +31,11 @@ const CACHE_COLD_MIN = 60
 const COLD_PROMPT_MIN_TOKENS = 50_000
 
 // A handoff skill may be installed bare (`handoff`) or namespaced by a plugin or synced account (`anthropic-skills:handoff`).
-// Skills synced from claude.ai may be missing from the list, so the account's namespace is tried last.
-const HANDOFF_FALLBACK = 'anthropic-skills:handoff'
 const runHandoff = async ($: EngineInterface) => {
   const names = (await $.command.list()).map(c => c.name)
-  const command =
-    names.find(n => n === 'handoff') ?? names.find(n => n === HANDOFF_FALLBACK) ?? names.find(n => n.toLowerCase().endsWith(':handoff')) ?? HANDOFF_FALLBACK
-  await $.command.run({ command }).catch(() => $.ui.toast('No handoff skill or command installed.'))
+  const command = names.find(n => n === 'handoff') ?? names.find(n => n.endsWith(':handoff'))
+  if (command) await $.command.run({ command })
+  else $.ui.toast('No handoff skill or command installed.')
 }
 
 // `compactAt` is the window auto-compaction measures against (what the app's Context % uses), smaller than the model's.
@@ -244,7 +243,7 @@ export const register: Register = on => {
     }
 
     return (
-      <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0}>
+      <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0} backgroundColor={BAND_BG}>
         <Box flexDirection="row" alignItems="center" gap="lg" flexGrow={1}>
           <Text mono weight="bold" color={LABEL}>USAGE</Text>
           {meter('five', '5H', u.fiveHour, undefined, FIVE_HOUR)}
