@@ -21,7 +21,7 @@ const CONTEXT = '#7fb8d6'
 const WARM = '#7cbf6a'
 const COOLING = '#5fb8b0'
 const COLD = '#5b9bf0'
-const DOTS = 10
+const DOTS = 6
 
 // Pro's prompt cache lives about an hour; warn a bit before.
 const CACHE_COOLING_MIN = 45
@@ -242,9 +242,9 @@ export const register: Register = on => {
     }
 
     return (
-      <Box flexDirection="row" alignItems="center" gap="lg" paddingX="md" paddingY={0}>
+      <Box flexDirection="row" alignItems="center" gap="md" paddingX="md" paddingY={0}>
         {/* When the row is too wide, the meters clip at the right so HANDOFF stays on screen. */}
-        <Box flexDirection="row" alignItems="center" gap="lg" flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
+        <Box flexDirection="row" alignItems="center" gap="md" flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
           <Text mono weight="bold" color={LABEL}>USAGE</Text>
           {meter('five', '5H', u.fiveHour, undefined, FIVE_HOUR)}
           {meter('week', '7D', u.week, undefined, WEEK)}
