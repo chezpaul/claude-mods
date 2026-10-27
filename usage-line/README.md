@@ -33,6 +33,6 @@ USAGE   5H ●●●●●●···· 59% · 1h 52m   7D ●●●●·····�
 - **5H / 7D**: share of your 5-hour and weekly limits used, and time until each resets.
 - **CACHE**: minutes since the last message. Warm under 45 min, Cooling to 60, Cold after: the prompt cache has likely expired, so the next message re-reads the whole chat at full price. Consider a fresh session.
 - **CTX**: how full the context window is; every message re-reads it.
-- Warnings pop up once when context passes 40/60/80% and when the session's estimated cost passes $5/$10/$20.
+- Warnings pop up once when context passes 40/60/80% and when the 5-hour limit passes 50/75/90% (again in each new 5-hour window).
 
 In the desktop app it draws as a band above the prompt; in the terminal it adds the figures to the hint line under the prompt.

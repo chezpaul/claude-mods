@@ -1,7 +1,7 @@
 {
   "name": "usage-line",
   "version": "0.1.0",
-  "description": "Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age, context use; warns when a session gets expensive",
+  "description": "Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age, context use; warns as context and the 5-hour limit fill up",
   "types": "./types/index.d.ts",
   "author": {
     "name": "chezpaul"

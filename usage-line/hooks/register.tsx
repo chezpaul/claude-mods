@@ -8,9 +8,9 @@ const lastActivity = atom({ plugin: 'usage-line', key: 'lastActivity' } as const
 // Bumped every minute so the cache timer redraws.
 const tick = atom({ plugin: 'usage-line', key: 'tick' } as const, 0)
 
-// Warn once per level, per session. Context % is what each message re-reads; usd is /cost's API-price estimate.
+// Warn once per level: context per session (what each message re-reads), 5-hour limit per window.
 const CONTEXT_WARN = [40, 60, 80]
-const USD_WARN = [5, 10, 20]
+const FIVE_HOUR_WARN = [50, 75, 90]
 
 // Band palette.
 const BAND_BG = '#24221e'
@@ -54,7 +54,6 @@ function toLine(u: Usage): string | undefined {
     u.fiveHour !== undefined && `5h ${Math.round(u.fiveHour)}%`,
     u.week !== undefined && `week ${Math.round(u.week)}%`,
     u.contextPct !== undefined && `ctx ${Math.round(u.contextPct)}%`,
-    u.usd !== undefined && `$${u.usd.toFixed(2)}`,
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : undefined
 }
@@ -91,10 +90,13 @@ export const register: Register = on => {
         $.ui.toast(`Session context at ${Math.round(u.contextPct!)}%: every message re-reads it. Consider /handoff then /clear, or /compact.`)
       }
     }
-    for (const level of USD_WARN) {
-      if ((u.usd ?? 0) >= level && !warned.has(`u${level}`)) {
-        warned.add(`u${level}`)
-        $.ui.toast(`This session has cost about $${u.usd!.toFixed(2)} so far.`)
+    for (const level of FIVE_HOUR_WARN) {
+      // Keyed by the window's reset time so a fresh 5-hour window warns again.
+      const key = `f${level}-${u.fiveHourResetsAt}`
+      if ((u.fiveHour ?? 0) >= level && !warned.has(key)) {
+        warned.add(key)
+        const reset = untilReset(u.fiveHourResetsAt, Date.now())
+        $.ui.toast(`5-hour limit ${Math.round(u.fiveHour!)}% used${reset ? `, resets in ${reset}` : ''}.`)
       }
     }
     return next(e)
