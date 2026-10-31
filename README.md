@@ -61,6 +61,6 @@ In the desktop app it draws as a band above the prompt; in the terminal it adds 
 
 The prompt cache lasts an hour from the last message. 59 minutes after a turn ends with nothing new, this mod runs your `handoff` skill (bare `handoff` or namespaced, like `anthropic-skills:handoff`) while the cache is still warm, so the handoff is cheap.
 
-- Skips it when the last turn was already a handoff, whether you typed `/handoff` or asked Claude to write one.
+- Skips it when the last turn was already a handoff, whether you typed `/handoff` or asked Claude to write one, and after `/clear`.
 - A new message restarts the countdown. After an auto-handoff it doesn't fire again until you send something else.
 - Only runs while the session is open and the Mac is awake. Each open idle session hands off on its own.

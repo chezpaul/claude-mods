@@ -73,3 +73,22 @@ test('no handoff when the model ran the handoff skill', async ($, on) => {
   await clock.advance(70 * 60_000)
   expect(sent).toEqual([])
 })
+
+test('no handoff into a session that was cleared', async ($, on) => {
+  const clock = mock.clock(on)
+  const sent: string[] = []
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  on('turn.complete', () => ({ text: '' }))
+  on('session.end', (_, e) => ({ sessionId: e.sessionId }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('command.list', () => ({ value: COMMANDS }))
+  on('command.run', (_, e) => (sent.push(e.command), { text: '' }))
+
+  await $.prompt.submit({ text: 'fix the bug' })
+  await $.turn.complete(turnEnd('t1'))
+  await clock.advance(10 * 60_000)
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: {} as never })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await clock.advance(70 * 60_000)
+  expect(sent).toEqual([])
+})

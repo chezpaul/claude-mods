@@ -17,6 +17,23 @@ export const register: Register = on => {
   // Whether the last turn the person (or the model) started was a handoff.
   let lastWasHandoff = false
 
+  // /clear ends the conversation without a turn, so drop the countdown from the old one.
+  const reset = () => {
+    timer?.cancel()
+    timer = undefined
+    lastWasHandoff = false
+  }
+
+  on('session.end', async ($, e, next) => {
+    reset()
+    return next(e)
+  })
+
+  on('session.start', async ($, e, next) => {
+    reset()
+    return next(e)
+  })
+
   on('prompt.submit', async ($, e, next) => {
     timer?.cancel()
     timer = undefined
