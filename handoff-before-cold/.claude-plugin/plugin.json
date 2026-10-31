@@ -1,0 +1,9 @@
+{
+  "name": "handoff-before-cold",
+  "version": "0.1.0",
+  "description": "Runs /handoff at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff",
+  "author": {
+    "name": "chezpaul"
+  },
+  "license": "MIT"
+}

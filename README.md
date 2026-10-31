@@ -5,6 +5,7 @@ Mods for Claude Code (terminal and the desktop app's Code tab).
 | Mod | What it does |
 | --- | --- |
 | [usage-line](./usage-line) | Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age (Warm / Cooling / Cold), and context use. Pops up a warning when a session's context or cost gets high. |
+| [handoff-before-cold](./handoff-before-cold) | Runs `/handoff` by itself at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff. |
 
 ## Install
 
@@ -12,6 +13,7 @@ At the prompt of a terminal Claude Code session:
 
 ```
 /plugin install usage-line --marketplace chezpaul/claude-mods
+/plugin install handoff-before-cold --marketplace chezpaul/claude-mods
 ```
 
 From a shell:
@@ -54,3 +56,11 @@ USAGE   5H ●●●●●●···· 59%   7D ●●●●······ 38%   CA
 - Warnings pop up once when context passes 40/60/80% and when the 5-hour limit passes 50/75/90% (again in each new 5-hour window).
 
 In the desktop app it draws as a band above the prompt; in the terminal it adds the figures to the hint line under the prompt.
+
+## handoff-before-cold
+
+The prompt cache lasts an hour from the last message. 59 minutes after a turn ends with nothing new, this mod runs your `handoff` skill (bare `handoff` or namespaced, like `anthropic-skills:handoff`) while the cache is still warm, so the handoff is cheap.
+
+- Skips it when the last turn was already a handoff, whether you typed `/handoff` or asked Claude to write one.
+- A new message restarts the countdown. After an auto-handoff it doesn't fire again until you send something else.
+- Only runs while the session is open and the Mac is awake. Each open idle session hands off on its own.

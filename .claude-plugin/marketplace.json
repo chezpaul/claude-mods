@@ -1,7 +1,18 @@
 {
   "name": "claude-mods",
-  "owner": { "name": "chezpaul" },
+  "owner": {
+    "name": "chezpaul"
+  },
   "plugins": [
-    { "name": "usage-line", "source": "./usage-line", "description": "Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age, context use" }
+    {
+      "name": "usage-line",
+      "source": "./usage-line",
+      "description": "Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age, context use"
+    },
+    {
+      "name": "handoff-before-cold",
+      "source": "./handoff-before-cold",
+      "description": "Runs /handoff at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff"
+    }
   ]
 }
