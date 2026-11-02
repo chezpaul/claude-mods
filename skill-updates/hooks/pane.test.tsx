@@ -66,8 +66,7 @@ test('folded, the pane is one line with the count to press', async ($, on) => {
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.find({ type: 'Button', key: 'toggle' }))?.text).toContain('Skill updates')
-    expect(await ui.find({ type: 'Button', key: 'count' })).toBeTruthy()
-    expect(await ui.find({ type: 'Text', text: /^2$/ })).toBeTruthy()
+    expect((await ui.find({ type: 'Button', key: 'count' }))?.text).toBe('2')
     expect(await ui.find({ type: 'Button', key: 'all' })).toBeFalsy()
     await ui.press({ key: 'toggle' })
     expect(await ui.find({ type: 'Button', key: 'all' })).toBeTruthy()

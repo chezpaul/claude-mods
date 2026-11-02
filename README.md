@@ -71,10 +71,10 @@ The prompt cache lasts an hour from the last message. 59 minutes after a turn en
 
 A pane in the sidebar that compares every skill and plugin you added with its GitHub source, file by file, and lists the ones that are behind.
 
-Folded, it takes one line, with the number of updates blinking at the right:
+Folded, it takes one line, with the number of updates as a button at the right:
 
 ```
-Skill updates ▸                              3
+Skill updates ▸                          [ 3 ]
 ```
 
 Click the line to unfold the full list (`/skill-updates` unfolds it too); click it again to fold it:
