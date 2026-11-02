@@ -155,15 +155,19 @@ export const register: Register = on => {
           <Box flexDirection="column">
             {actionable.map(item => (
               <Box key={`row:${item.id}`} flexDirection="row" justifyContent="space-between">
-                <Text>
-                  {item.name}{' '}
-                  <Text dimColor>
-                    {KIND_LABEL[item.kind]}
-                    {item.localVersion && item.remoteVersion && item.localVersion !== item.remoteVersion
-                      ? ` · ${item.localVersion} → ${item.remoteVersion}`
-                      : item.remoteVersion ? ` · → ${item.remoteVersion}` : ' · newer on GitHub'}
+                <Box flexDirection="column">
+                  <Text>
+                    {item.name}{' '}
+                    <Text dimColor>
+                      {KIND_LABEL[item.kind]}
+                      {item.localVersion && item.remoteVersion && item.localVersion !== item.remoteVersion
+                        ? ` · ${item.localVersion} → ${item.remoteVersion}`
+                        : item.remoteVersion ? ` · → ${item.remoteVersion}` : ' · newer on GitHub'}
+                    </Text>
                   </Text>
-                </Text>
+                  {/* Where the new copy comes from, before anything is replaced. */}
+                  {item.repo && <Text dimColor>  from github.com/{item.repo}</Text>}
+                </Box>
                 <Button key={`u:${item.id}`} plain onPress={later(() => updateItems($, [item], item.id))}>
                   {working === item.id ? 'Updating…' : item.kind === 'claudeai' ? 'Build zip' : 'Update'}
                 </Button>

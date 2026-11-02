@@ -37,6 +37,10 @@ SOURCES = os.path.join(MOD_ROOT, "sources.json")
 GH_URL = re.compile(r"github\.com[/:]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?(?=[/)\s\"'#?]|$)", re.M)
 VERSION = re.compile(r"^\s*version:\s*[\"']?([^\"'\n]+?)[\"']?\s*$", re.M)
 HEX = re.compile(r"^[0-9a-f]{7,40}$")
+NAME = re.compile(r"^\s*name:\s*[\"']?([^\"'\n]+?)[\"']?\s*$", re.M)
+SAFE_VERSION = re.compile(r"^[\w.+-]{1,40}$")
+SAFE_NAME = re.compile(r"^[\w.-]{1,64}$")
+CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 NOT_REPOS = {"github.com/anthropics/skills"}
 
 
@@ -60,9 +64,24 @@ def blob_sha(path):
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
+def frontmatter(text):
+    return text.split("\n---", 1)[0] if text.startswith("---") else ""
+
+
 def version_of(text):
-    m = VERSION.search(text.split("\n---", 1)[0] if text.startswith("---") else text[:2000])
+    m = VERSION.search(frontmatter(text) or text[:2000])
+    v = m.group(1).strip() if m else None
+    # Versions come from GitHub and are drawn in the pane: keep plain ones only.
+    return v if v and SAFE_VERSION.match(v) else None
+
+
+def name_of(text):
+    m = NAME.search(frontmatter(text))
     return m.group(1).strip() if m else None
+
+
+def clean(value, limit=200):
+    return CONTROL.sub("", str(value))[:limit] if value is not None else None
 
 
 def load_sources():
@@ -91,7 +110,7 @@ def discover_skills():
     items = []
     for name in sorted(os.listdir(SKILLS)):
         d = os.path.join(SKILLS, name)
-        if name.startswith(".") or name == "synced" or not os.path.isfile(os.path.join(d, "SKILL.md")):
+        if name.startswith(".") or name == "synced" or not SAFE_NAME.match(name) or not os.path.isfile(os.path.join(d, "SKILL.md")):
             continue
         items.append({"kind": "personal", "name": name, "dir": d})
     for bucket in sorted(os.listdir(SYNCED)) if os.path.isdir(SYNCED) else []:
@@ -104,7 +123,7 @@ def discover_skills():
         for s in manifest.get("skills", []):
             d = os.path.join(b, s["name"])
             # Anthropic's own skills update themselves; only your uploads are checked.
-            if s.get("source") == "plugin" and os.path.isfile(os.path.join(d, "SKILL.md")):
+            if s.get("source") == "plugin" and SAFE_NAME.match(s.get("name", "")) and os.path.isfile(os.path.join(d, "SKILL.md")):
                 items.append({"kind": "claudeai", "name": s["name"], "dir": d})
     return items
 
@@ -185,10 +204,17 @@ def check_skill(item, sources):
         if path is None:
             continue
         upstream_md = gh_file(repo, (path + "/" if path else "") + "SKILL.md", sha)
+        # A link in a skill's files is only a guess at its source: the repo's
+        # SKILL.md has to name the same skill before it can replace this one.
+        if name_of(upstream_md) != name:
+            if override:
+                return {**out, "repo": repo, "status": "error", "note": "the repo's SKILL.md names another skill"}
+            continue
         want = compared_files(files, path, upstream_md, d)
         changed = [p for p, s in want.items()
                    if not os.path.isfile(os.path.join(d, p)) or blob_sha(os.path.join(d, p)) != s]
         return {**out, "repo": repo, "path": path, "remoteSha": sha, "remoteVersion": version_of(upstream_md),
+                "source": "sources.json" if override else "link in the skill",
                 "status": "outdated" if changed else "current", "changed": changed[:20]}
     return {**out, "status": "untracked", "note": "no GitHub source"}
 
@@ -262,15 +288,16 @@ def check_plugin(p, markets):
         head = cmp["commits"][-1]["sha"] if cmp.get("commits") else None
         touched = [f["filename"] for f in cmp.get("files", []) if not path or f["filename"].startswith(path + "/")]
         outdated = cmp.get("ahead_by", 0) > 0 and bool(touched)
-        return {**out, "remoteVersion": head[:12] if head else iv, "status": "outdated" if outdated else "current"}
+        return {**out, "remoteVersion": head[:12] if head and HEX.match(head) else iv, "status": "outdated" if outdated else "current"}
     rv = entry.get("version")
     if not rv:
         try:
             rv = json.loads(gh_file(repo, (path + "/" if path else "") + ".claude-plugin/plugin.json", "HEAD")).get("version")
         except (RuntimeError, ValueError):
             rv = None
+    rv = str(rv) if rv is not None and SAFE_VERSION.match(str(rv)) else None
     if not rv:
-        return {**out, "status": "untracked", "note": "no version upstream"}
+        return {**out, "status": "untracked", "note": "no plain version upstream"}
     return {**out, "remoteVersion": rv, "status": "outdated" if rv != iv else "current"}
 
 
@@ -305,6 +332,7 @@ def check():
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         items = list(pool.map(run, jobs))
+    items = [{k: (clean(v) if isinstance(v, str) else v) for k, v in i.items()} for i in items]
     order = {"outdated": 0, "error": 1, "current": 2, "untracked": 3}
     items.sort(key=lambda i: (order.get(i["status"], 9), i["kind"], i["name"]))
     return {"checkedAt": int(time.time() * 1000), "items": items}
@@ -366,6 +394,8 @@ def main():
             result = {"ok": False, "message": "usage: skill_updates.py check | update <id>"}
     except Exception as err:
         result = {"ok": False, "message": str(err)[:300]}
+    if isinstance(result.get("message"), str):
+        result["message"] = clean(result["message"], 500)
     json.dump(result, sys.stdout)
 
 
