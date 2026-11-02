@@ -28,6 +28,7 @@ import time
 HOME = os.path.expanduser("~")
 SKILLS = os.path.join(HOME, ".claude", "skills")
 SYNCED = os.path.join(SKILLS, "synced")
+DESKTOP_SYNCED = os.path.join(HOME, "Library", "Application Support", "Claude", "local-agent-mode-sessions", "skills-plugin")
 BACKUPS = os.path.join(HOME, ".claude", "skill-backups")
 MARKETPLACES = os.path.join(HOME, ".claude", "plugins", "known_marketplaces.json")
 DESKTOP = os.path.join(HOME, "Desktop")
@@ -80,6 +81,24 @@ def name_of(text):
     return m.group(1).strip() if m else None
 
 
+def same_skill_md(local_text, upstream_text):
+    """claude.ai re-writes SKILL.md's frontmatter on upload (quotes, folded lines),
+    so the frontmatter is compared by its words and the body byte for byte."""
+    def split(text):
+        if text.startswith("---"):
+            head, sep, body = text[3:].partition("\n---")
+            if sep:
+                return head, body
+        return "", text
+
+    def words(head):
+        head = head.replace("\\n", " ").replace('\\"', '"')
+        return sorted(re.sub(r"[\"'|>]", " ", head).split())
+
+    (lh, lb), (uh, ub) = split(local_text), split(upstream_text)
+    return lb.strip() == ub.strip() and words(lh) == words(uh)
+
+
 def clean(value, limit=200):
     return CONTROL.sub("", str(value))[:limit] if value is not None else None
 
@@ -106,6 +125,18 @@ def repo_tree(repo):
 
 # ---------- skills ----------
 
+def synced_copies():
+    found = []
+    if os.path.isdir(SYNCED):
+        found += [os.path.join(SYNCED, b) for b in sorted(os.listdir(SYNCED)) if not b.startswith(".")]
+    if os.path.isdir(DESKTOP_SYNCED):
+        for org in sorted(os.listdir(DESKTOP_SYNCED)):
+            o = os.path.join(DESKTOP_SYNCED, org)
+            if os.path.isdir(o):
+                found += [os.path.join(o, b) for b in sorted(os.listdir(o)) if not b.startswith(".")]
+    return found
+
+
 def discover_skills():
     items = []
     for name in sorted(os.listdir(SKILLS)):
@@ -113,18 +144,28 @@ def discover_skills():
         if name.startswith(".") or name == "synced" or not SAFE_NAME.match(name) or not os.path.isfile(os.path.join(d, "SKILL.md")):
             continue
         items.append({"kind": "personal", "name": name, "dir": d})
-    for bucket in sorted(os.listdir(SYNCED)) if os.path.isdir(SYNCED) else []:
-        b = os.path.join(SYNCED, bucket)
+    # Two copies of your claude.ai skills can be on disk: the desktop app's and
+    # the CLI's. Either can lag the other, so read the one synced last.
+    best = None
+    for b in synced_copies():
         try:
             with open(os.path.join(b, "manifest.json")) as f:
                 manifest = json.load(f)
         except (OSError, ValueError):
             continue
+        if best is None or manifest.get("lastUpdated", 0) > best[1].get("lastUpdated", 0):
+            best = (b, manifest)
+    if best:
+        b, manifest = best
+        root = os.path.join(b, "skills") if os.path.isdir(os.path.join(b, "skills")) else b
         for s in manifest.get("skills", []):
-            d = os.path.join(b, s["name"])
+            name = s.get("name", "")
+            d = os.path.join(root, name)
             # Anthropic's own skills update themselves; only your uploads are checked.
-            if s.get("source") == "plugin" and SAFE_NAME.match(s.get("name", "")) and os.path.isfile(os.path.join(d, "SKILL.md")):
-                items.append({"kind": "claudeai", "name": s["name"], "dir": d})
+            anthropic = str(s.get("source") or s.get("creatorType") or "").startswith("anthropic")
+            if not anthropic and SAFE_NAME.match(name) \
+                    and os.path.isfile(os.path.join(d, "SKILL.md")):
+                items.append({"kind": "claudeai", "name": name, "dir": d})
     return items
 
 
@@ -212,7 +253,9 @@ def check_skill(item, sources):
             continue
         want = compared_files(files, path, upstream_md, d)
         changed = [p for p, s in want.items()
-                   if not os.path.isfile(os.path.join(d, p)) or blob_sha(os.path.join(d, p)) != s]
+                   if not os.path.isfile(os.path.join(d, p))
+                   or (blob_sha(os.path.join(d, p)) != s
+                       and not (p == "SKILL.md" and same_skill_md(local_md, upstream_md)))]
         return {**out, "repo": repo, "path": path, "remoteSha": sha, "remoteVersion": version_of(upstream_md),
                 "source": "sources.json" if override else "link in the skill",
                 "status": "outdated" if changed else "current", "changed": changed[:20]}
