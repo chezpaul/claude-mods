@@ -13,6 +13,11 @@
       "name": "handoff-before-cold",
       "source": "./handoff-before-cold",
       "description": "Runs /handoff at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff"
+    },
+    {
+      "name": "skill-updates",
+      "source": "./skill-updates",
+      "description": "Sidebar pane that checks your skills and plugins against their GitHub sources and updates them in one press"
     }
   ]
 }

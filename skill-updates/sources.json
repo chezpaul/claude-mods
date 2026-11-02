@@ -1,0 +1,8 @@
+{
+  "skills": {
+    "swiftui-pro": "twostraws/SwiftUI-Agent-Skill",
+    "ui-ux-pro-max": "nextlevelbuilder/ui-ux-pro-max-skill",
+    "find-skills": "vercel-labs/skills"
+  },
+  "ignore": []
+}

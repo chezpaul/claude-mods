@@ -5,6 +5,7 @@ Mods for Claude Code (terminal and the desktop app's Code tab).
 | Mod | What it does |
 | --- | --- |
 | [usage-line](./usage-line) | Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age (Warm / Cooling / Cold), and context use. Pops up a warning when a session's context or cost gets high. |
+| [skill-updates](./skill-updates) | Sidebar pane listing skills and plugins that are behind their GitHub source, with an **Update all** button. |
 | [handoff-before-cold](./handoff-before-cold) | Runs `/handoff` by itself at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff. |
 
 ## Install
@@ -14,6 +15,7 @@ At the prompt of a terminal Claude Code session:
 ```
 /plugin install usage-line --marketplace chezpaul/claude-mods
 /plugin install handoff-before-cold --marketplace chezpaul/claude-mods
+/plugin install skill-updates --marketplace chezpaul/claude-mods
 ```
 
 From a shell:
@@ -64,3 +66,23 @@ The prompt cache lasts an hour from the last message. 59 minutes after a turn en
 - Skips it when the last turn was already a handoff, whether you typed `/handoff` or asked Claude to write one, and after `/clear`.
 - A new message restarts the countdown. After an auto-handoff it doesn't fire again until you send something else.
 - Only runs while the session is open and the Mac is awake. Each open idle session hands off on its own.
+
+## skill-updates
+
+A pane in the sidebar that compares every skill and plugin you added with its GitHub source, file by file, and lists the ones that are behind.
+
+```
+3 updates · checked 2h ago                Refresh
+[ Update all (3) ]
+humanizer    claude.ai · 2.5.1 → 3.1.0    Build zip
+swiftui-pro  skill · 1.1 → 2.0.0          Update
+superpowers  plugin · 6.4.2 → 7.0.1       Update
+9 up to date · not on GitHub: restore, thread-security
+```
+
+- **Skills in `~/.claude/skills`**: replaced with the GitHub copy. The old folder is kept in `~/.claude/skill-backups/`.
+- **Skills you uploaded to claude.ai**: Claude Code can't upload, so the button builds the zip on your Desktop and shows it in Finder. Upload it on claude.ai to replace the old one; the pane stops listing it once the new version syncs.
+- **Marketplace plugins**: runs `claude plugin update`. The new version loads in your next session.
+- Anthropic's own skills update themselves and aren't listed.
+
+It checks when a session starts (at most every 12 hours), and on **Refresh** or `/skill-updates`. GitHub repos come from `github.com` links in each skill's files; add any it can't find to `sources.json` (`"skill-name": "owner/repo"`, or `"none"` to stop checking one). Needs the GitHub CLI (`gh`) signed in, and Python 3.

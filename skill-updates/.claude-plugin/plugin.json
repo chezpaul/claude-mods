@@ -1,0 +1,6 @@
+{
+  "name": "skill-updates",
+  "version": "0.1.0",
+  "description": "Sidebar pane that checks your skills and plugins against their GitHub sources and updates them in one press",
+  "types": "./types/index.d.ts"
+}
