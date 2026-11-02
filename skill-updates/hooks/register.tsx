@@ -35,6 +35,11 @@ async function script($: EngineInterface, args: string[], timeoutMs: number) {
   }
 }
 
+// Updates still to act on: newer on GitHub, or a built zip still to upload.
+function pending(data: Report | null | undefined) {
+  return data?.items.filter(i => i.status === 'outdated').length ?? 0
+}
+
 async function check($: EngineInterface) {
   if (await read($, busy)) return
   await update($, busy, () => 'check')
@@ -43,6 +48,8 @@ async function check($: EngineInterface) {
     if (Array.isArray(result.items)) {
       await update($, report, () => result as Report)
       await $.store.set('report', result)
+      // A folded pane opened for updates that turned out to be done goes away.
+      if (pending(result as Report) === 0 && !(await read($, expanded))) await $.ui.close({ id: PANE })
       // A zip that the sync has caught up with, or that an even newer commit
       // has overtaken, is no longer waiting for an upload.
       const byId = new Map((result as Report).items.map(i => [i.id, i]))
@@ -128,7 +135,9 @@ export const register: Register = on => {
       )
       await update($, zips, () => zipsNow)
     }
-    void $.ui.open({ id: PANE, title: TITLE })
+    // The pane shows up only when the last check found updates; this start's
+    // check runs in the background and its result decides the next start.
+    if (pending(stored) > 0) void $.ui.open({ id: PANE, title: TITLE })
     // Every start checks again: the stored report only fills the pane until then.
     $.clock.after(1_000, () => void check($))
     $.clock.every(STALE_MS, () => void check($))
