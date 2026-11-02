@@ -32,7 +32,7 @@ function seed(on: any, values: Record<string, unknown>) {
 }
 
 test('the pane lists what is behind GitHub, on every surface', async ($, on) => {
-  seed(on, { report: { shape: 'report-1', value: REPORT } })
+  seed(on, { report: { shape: 'report-1', value: REPORT }, expanded: true })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.find({ type: 'Button', key: 'all' }))?.text).toContain('Update all (2)')
@@ -45,7 +45,7 @@ test('the pane lists what is behind GitHub, on every surface', async ($, on) => 
 })
 
 test('a built zip waits for its upload instead of offering the button again', async ($, on) => {
-  seed(on, { report: { shape: 'report-1', value: REPORT }, zips: { 'claudeai:humanizer': 'abc' } })
+  seed(on, { report: { shape: 'report-1', value: REPORT }, zips: { 'claudeai:humanizer': 'abc' }, expanded: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await ui.find({ type: 'Button', key: 'u:claudeai:humanizer' })).toBeFalsy()
   expect((await ui.find({ type: 'Button', key: 'all' }))?.text).toContain('Update all (1)')
@@ -54,8 +54,25 @@ test('a built zip waits for its upload instead of offering the button again', as
 })
 
 test('before the first check the pane says so', async ($, on) => {
+  seed(on, { expanded: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /Not checked yet/ }))).toBeTruthy()
   expect(await ui.find({ type: 'Button', key: 'all' })).toBeFalsy()
   await ui.unmount()
+})
+
+test('folded, the pane is one line with the count to press', async ($, on) => {
+  seed(on, { report: { shape: 'report-1', value: REPORT } })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    expect((await ui.find({ type: 'Button', key: 'toggle' }))?.text).toContain('Skill updates')
+    expect(await ui.find({ type: 'Button', key: 'count' })).toBeTruthy()
+    expect(await ui.find({ type: 'Text', text: /^2$/ })).toBeTruthy()
+    expect(await ui.find({ type: 'Button', key: 'all' })).toBeFalsy()
+    await ui.press({ key: 'toggle' })
+    expect(await ui.find({ type: 'Button', key: 'all' })).toBeTruthy()
+    // Fold it again: the state is shared by the next surface's pass.
+    await ui.press({ key: 'toggle' })
+    await ui.unmount()
+  }
 })

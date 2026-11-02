@@ -13,6 +13,17 @@ const report = atom({ plugin: 'skill-updates', key: 'report' } as const, null, {
 const busy = atom({ plugin: 'skill-updates', key: 'busy' } as const, null)
 const message = atom({ plugin: 'skill-updates', key: 'message' } as const, null)
 const zips = atom({ plugin: 'skill-updates', key: 'zips' } as const, {})
+// Folded, the pane is one line; a press on it unfolds the full list.
+const expanded = atom({ plugin: 'skill-updates', key: 'expanded' } as const, false)
+const blink = atom({ plugin: 'skill-updates', key: 'blink' } as const, true)
+const BLINK_MS = 700
+
+// What still needs a press: outdated, with no zip already built for it.
+async function pending($: EngineInterface) {
+  const data = await read($, report)
+  const built = await read($, zips)
+  return data?.items.filter(i => i.status === 'outdated' && !built[i.id]).length ?? 0
+}
 
 const KIND_LABEL: Record<Item['kind'], string> = {
   personal: 'skill',
@@ -101,11 +112,16 @@ export const register: Register = on => {
     const now = await $.clock.now()
     if (!stored || now - stored.checkedAt > STALE_MS) $.clock.after(5_000, () => void check($))
     $.clock.every(STALE_MS, () => void check($))
+    // The folded line's count blinks; nothing is written while there is nothing to show.
+    $.clock.every(BLINK_MS, async () => {
+      if (!(await read($, expanded)) && (await pending($)) > 0) await update($, blink, lit => !lit)
+    })
     return started
   })
 
   on('command.run', { command: 'skill-updates' }, async $ => {
     await $.ui.open({ id: PANE, title: TITLE })
+    await update($, expanded, () => true)
     $.clock.after(0, () => void check($))
     return { text: 'Checking your skills and plugins for updates.' }
   })
@@ -132,8 +148,33 @@ export const register: Register = on => {
       ? working ? 'Checking GitHub…' : 'Not checked yet'
       : `${actionable.length === 0 ? 'All up to date' : `${actionable.length} update${actionable.length === 1 ? '' : 's'}`} · checked ${ago(now - data.checkedAt)}`
 
+    const isOpen = await read($, expanded)
+    const toggle = () => void update($, expanded, open => !open)
+    const label = actionable.length === 1 ? 'Skill update' : 'Skill updates'
+
+    if (!isOpen) {
+      const lit = await read($, blink)
+      return (
+        <Box flexDirection="row" justifyContent="space-between">
+          <Button key="toggle" plain onPress={toggle}>
+            {label} <Text dimColor>▸</Text>
+          </Button>
+          <Button key="count" plain onPress={toggle}>
+            {working
+              ? <Text dimColor>…</Text>
+              : actionable.length > 0
+                ? <Text bold color="yellow" dimColor={!lit}>{String(actionable.length)}</Text>
+                : <Text dimColor>✓</Text>}
+          </Button>
+        </Box>
+      )
+    }
+
     return (
       <Box flexDirection="column" gap={1}>
+        <Button key="toggle" plain onPress={toggle}>
+          {label} <Text dimColor>▾</Text>
+        </Button>
         <Box flexDirection="row" justifyContent="space-between">
           <Text bold>{working === 'check' ? 'Checking GitHub…' : summary}</Text>
           <Button key="refresh" plain dimColor onPress={later(() => check($))}>

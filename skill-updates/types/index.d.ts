@@ -21,6 +21,9 @@ declare module 'claude-code' {
       message: string | null
       // claude.ai skills whose zip is built, by id: the upstream commit it holds
       zips: Record<string, string>
+      expanded: boolean
+      // the folded line's count, lit or dim
+      blink: boolean
     }
   }
 }

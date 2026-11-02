@@ -71,7 +71,16 @@ The prompt cache lasts an hour from the last message. 59 minutes after a turn en
 
 A pane in the sidebar that compares every skill and plugin you added with its GitHub source, file by file, and lists the ones that are behind.
 
+Folded, it takes one line, with the number of updates blinking at the right:
+
 ```
+Skill updates ▸                              3
+```
+
+Click the line to unfold the full list (`/skill-updates` unfolds it too); click it again to fold it:
+
+```
+Skill updates ▾
 3 updates · checked 2h ago                Refresh
 [ Update all (3) ]
 humanizer    claude.ai · 2.5.1 → 3.1.0    Build zip
