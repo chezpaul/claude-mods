@@ -3,6 +3,8 @@
 
   skill_updates.py check            -> JSON report on stdout
   skill_updates.py update <id>      -> JSON result on stdout
+  skill_updates.py synced           -> when the claude.ai skills last synced to this Mac
+  skill_updates.py trash <zip>      -> moves a zip this script built on the Desktop to the Trash
 
 Kinds of item:
   personal  ~/.claude/skills/<name>, replaced in place (old copy kept in ~/.claude/skill-backups)
@@ -15,6 +17,7 @@ import base64
 import concurrent.futures
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -97,6 +100,35 @@ def same_skill_md(local_text, upstream_text):
 
     (lh, lb), (uh, ub) = split(local_text), split(upstream_text)
     return lb.strip() == ub.strip() and words(lh) == words(uh)
+
+
+def field(text, key):
+    """One frontmatter value as plain text, folded and block scalars joined."""
+    lines = frontmatter(text).splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(rf"^{key}:\s*(.*)$", line)
+        if not m:
+            continue
+        value = m.group(1).strip()
+        if value in ("", ">", "|", ">-", "|-"):
+            value = " ".join(l.strip() for l in itertools.takewhile(lambda l: not l.strip() or l[0] in " \t", lines[i + 1:]))
+        return value.strip("\"'")
+    return ""
+
+
+def listing_tokens(text, name=None):
+    """Rough tokens the session's skill/agent listing spends on this file every message:
+    its name and description (about 4 characters a token)."""
+    line = f"- {name or field(text, 'name')}: {field(text, 'description')} {field(text, 'when_to_use')}"
+    return round(len(line.strip()) / 4)
+
+
+LISTED = re.compile(r"^(?:skills/[^/]+/SKILL\.md|agents/[^/]+\.md|commands/[^/]+\.md)$")
+
+
+def plugin_listing_tokens(paths, read):
+    """Listing tokens of a plugin's skills, agents and commands, by their paths in the plugin."""
+    return sum(listing_tokens(read(p)) for p in paths if LISTED.match(p))
 
 
 def clean(value, limit=200):
@@ -256,9 +288,12 @@ def check_skill(item, sources):
                    if not os.path.isfile(os.path.join(d, p))
                    or (blob_sha(os.path.join(d, p)) != s
                        and not (p == "SKILL.md" and same_skill_md(local_md, upstream_md)))]
-        return {**out, "repo": repo, "path": path, "remoteSha": sha, "remoteVersion": version_of(upstream_md),
-                "source": "sources.json" if override else "link in the skill",
-                "status": "outdated" if changed else "current", "changed": changed[:20]}
+        report = {**out, "repo": repo, "path": path, "remoteSha": sha, "remoteVersion": version_of(upstream_md),
+                  "source": "sources.json" if override else "link in the skill",
+                  "status": "outdated" if changed else "current", "changed": changed[:20]}
+        if changed:
+            report["tokenDelta"] = listing_tokens(upstream_md, name) - listing_tokens(local_md, name)
+        return report
     return {**out, "status": "untracked", "note": "no GitHub source"}
 
 
@@ -309,7 +344,37 @@ def parse_source(src, market_repo):
     return None, None
 
 
+def plugin_token_delta(p, repo, path):
+    """How many more listing tokens the upstream plugin spends each message than the installed one."""
+    local = p.get("installPath") or ""
+    if not os.path.isdir(local):
+        return None
+    local_files = []
+    for root, _, files in os.walk(local):
+        local_files += [os.path.relpath(os.path.join(root, f), local) for f in files]
+    here = plugin_listing_tokens(local_files, lambda r: open(os.path.join(local, r), encoding="utf-8", errors="replace").read())
+    sha, tree = repo_tree(repo)
+    prefix = path + "/" if path else ""
+    upstream = [f[len(prefix):] for f in tree if f.startswith(prefix)]
+    if sum(1 for f in upstream if LISTED.match(f)) > 80:
+        return None
+    there = plugin_listing_tokens(upstream, lambda r: gh_file(repo, prefix + r, sha))
+    return there - here
+
+
 def check_plugin(p, markets):
+    report = check_plugin_version(p, markets)
+    # A disabled plugin costs nothing either way.
+    if report["status"] == "outdated" and p.get("enabled") and report.get("repo"):
+        try:
+            report["tokenDelta"] = plugin_token_delta(p, report["repo"], report.pop("path", ""))
+        except (RuntimeError, OSError, ValueError):
+            pass
+    report.pop("path", None)
+    return report
+
+
+def check_plugin_version(p, markets):
     pid, iv = p["id"], str(p.get("version", ""))
     name, _, mk = pid.partition("@")
     out = {"id": f"plugin:{pid}", "kind": "plugin", "name": name, "marketplace": mk, "localVersion": iv,
@@ -325,7 +390,7 @@ def check_plugin(p, markets):
     repo, path = parse_source(entry.get("source"), market_repo)
     if not repo:
         return {**out, "status": "untracked", "note": "source not on GitHub"}
-    out["repo"] = repo
+    out["repo"], out["path"] = repo, path
     if HEX.match(iv):
         cmp = gh(f"repos/{repo}/compare/{iv}...HEAD")
         head = cmp["commits"][-1]["sha"] if cmp.get("commits") else None
@@ -427,14 +492,42 @@ def update(item_id):
                 "message": f"{os.path.basename(zip_path)} is on your Desktop: upload it on claude.ai to replace {item['name']}"}
 
 
+def synced():
+    stamps = []
+    for b in synced_copies():
+        try:
+            with open(os.path.join(b, "manifest.json")) as f:
+                stamps.append(int(json.load(f).get("lastUpdated", 0)))
+        except (OSError, ValueError, TypeError):
+            continue
+    return {"ok": True, "lastUpdated": max(stamps, default=0)}
+
+
+def trash(zip_path):
+    """Only a zip this script names (on the Desktop, <skill>-<version>.zip) goes."""
+    real = os.path.realpath(zip_path)
+    base = os.path.basename(real)
+    if os.path.dirname(real) != os.path.realpath(DESKTOP) or not base.endswith(".zip") \
+            or not SAFE_NAME.match(base[:-4]):
+        return {"ok": False, "message": "not a zip this mod built"}
+    if not os.path.isfile(real):
+        return {"ok": True, "message": f"{base} was already gone"}
+    subprocess.run(["/usr/bin/trash", real], check=True, capture_output=True, timeout=30)
+    return {"ok": True, "message": f"{base} moved to the Trash"}
+
+
 def main():
     try:
         if sys.argv[1:2] == ["check"]:
             result = check()
         elif sys.argv[1:2] == ["update"] and len(sys.argv) == 3:
             result = update(sys.argv[2])
+        elif sys.argv[1:2] == ["synced"]:
+            result = synced()
+        elif sys.argv[1:2] == ["trash"] and len(sys.argv) == 3:
+            result = trash(sys.argv[2])
         else:
-            result = {"ok": False, "message": "usage: skill_updates.py check | update <id>"}
+            result = {"ok": False, "message": "usage: skill_updates.py check | update <id> | synced | trash <zip>"}
     except Exception as err:
         result = {"ok": False, "message": str(err)[:300]}
     if isinstance(result.get("message"), str):

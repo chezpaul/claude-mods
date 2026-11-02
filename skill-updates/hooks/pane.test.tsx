@@ -18,7 +18,7 @@ const REPORT: import('../types').Report = {
   checkedAt: Date.now(),
   items: [
     { id: 'claudeai:humanizer', kind: 'claudeai', name: 'humanizer', status: 'outdated', localVersion: '2.5.1', remoteVersion: '3.1.0', remoteSha: 'abc' },
-    { id: 'personal:swiftui-pro', kind: 'personal', name: 'swiftui-pro', status: 'outdated', localVersion: '1.1', remoteVersion: '2.0.0', remoteSha: 'def' },
+    { id: 'personal:swiftui-pro', kind: 'personal', name: 'swiftui-pro', status: 'outdated', localVersion: '1.1', remoteVersion: '2.0.0', remoteSha: 'def', tokenDelta: 42 },
     { id: 'plugin:code-review@claude-plugins-official', kind: 'plugin', name: 'code-review', status: 'current' },
     { id: 'personal:restore', kind: 'personal', name: 'restore', status: 'untracked', note: 'no GitHub source' },
   ],
@@ -39,13 +39,14 @@ test('the pane lists what is behind GitHub, on every surface', async ($, on) => 
     expect((await ui.find({ type: 'Button', key: 'u:claudeai:humanizer' }))?.text).toContain('Build zip')
     expect((await ui.find({ type: 'Button', key: 'u:personal:swiftui-pro' }))?.text).toContain('Update')
     expect((await ui.find({ type: 'Text', text: /2\.5\.1 → 3\.1\.0/ }))).toBeTruthy()
+    expect((await ui.find({ type: 'Text', text: /\+42 tok/ }))).toBeTruthy()
     expect((await ui.find({ type: 'Text', text: /not on GitHub: restore/ }))).toBeTruthy()
     await ui.unmount()
   }
 })
 
 test('a built zip waits for its upload instead of offering the button again', async ($, on) => {
-  seed(on, { report: { shape: 'report-1', value: REPORT }, zips: { 'claudeai:humanizer': 'abc' }, expanded: true })
+  seed(on, { report: { shape: 'report-1', value: REPORT }, zips: { shape: 'zips-2', value: { 'claudeai:humanizer': { sha: 'abc', zip: '/Users/x/Desktop/humanizer-3.1.0.zip' } } }, expanded: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(await ui.find({ type: 'Button', key: 'u:claudeai:humanizer' })).toBeFalsy()
   expect((await ui.find({ type: 'Button', key: 'all' }))?.text).toContain('Update all (1)')

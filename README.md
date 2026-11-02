@@ -83,15 +83,16 @@ Click the line to unfold the full list (`/skill-updates` unfolds it too); click 
 Skill updates ▾
 3 updates · checked 2h ago                Refresh
 [ Update all (3) ]
-humanizer    claude.ai · 2.5.1 → 3.1.0    Build zip
-swiftui-pro  skill · 1.1 → 2.0.0          Update
-superpowers  plugin · 6.4.2 → 7.0.1       Update
+humanizer    claude.ai · 2.5.1 → 3.1.0 · +12 tok    Build zip
+swiftui-pro  skill · 1.1 → 2.0.0 · −30 tok         Update
+superpowers  plugin · 6.4.2 → 7.0.1 · +85 tok      Update
 9 up to date · not on GitHub: restore, thread-security
 ```
 
 - **Skills in `~/.claude/skills`**: replaced with the GitHub copy. The old folder is kept in `~/.claude/skill-backups/`.
-- **Skills you uploaded to claude.ai**: Claude Code can't upload, so the button builds the zip on your Desktop and shows it in Finder. Upload it on claude.ai to replace the old one; the pane stops listing it once the new version syncs.
+- **Skills you uploaded to claude.ai**: Claude Code can't upload, so the button builds the zip on your Desktop and shows it in Finder. Upload it on claude.ai to replace the old one. Once the new version syncs to this Mac (the pane looks every 2 minutes while a zip waits), the pane stops listing it and moves the zip to the Trash.
 - **Marketplace plugins**: runs `claude plugin update`. The new version loads in your next session.
 - Anthropic's own skills update themselves and aren't listed.
+- **`+12 tok`** is roughly how many more tokens (or, with `−`, fewer) every message will carry after the update: the skill listing's name and description, and for a plugin the listings of all its skills, agents and commands. It's an estimate at about 4 characters a token, and leaves out MCP tools and hooks. A disabled plugin shows none.
 
 It checks when a session starts (at most every 12 hours), and on **Refresh** or `/skill-updates`. GitHub repos come from `github.com` links in each skill's files; add any it can't find to `sources.json` (`"skill-name": "owner/repo"`, or `"none"` to stop checking one). Needs the GitHub CLI (`gh`) signed in, and Python 3.

@@ -1,18 +1,20 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Item, Report } from '../types'
+import type { Item, Report, Zip } from '../types'
 
 const PANE = 'skill-updates'
 const TITLE = 'Skill updates'
 const STALE_MS = 12 * 60 * 60 * 1000
+// While a zip waits for its upload, how often to look whether claude.ai has synced.
+const SYNC_POLL_MS = 2 * 60 * 1000
 
 // Change the tag when Report's fields change: it declines what an earlier
 // version stored, which outlives a reload.
 const report = atom({ plugin: 'skill-updates', key: 'report' } as const, null, { shape: 'report-1' })
 const busy = atom({ plugin: 'skill-updates', key: 'busy' } as const, null)
 const message = atom({ plugin: 'skill-updates', key: 'message' } as const, null)
-const zips = atom({ plugin: 'skill-updates', key: 'zips' } as const, {})
+const zips = atom({ plugin: 'skill-updates', key: 'zips' } as const, {}, { shape: 'zips-2' })
 // Folded, the pane is one line; a press on it unfolds the full list.
 const expanded = atom({ plugin: 'skill-updates', key: 'expanded' } as const, false)
 
@@ -43,13 +45,21 @@ async function check($: EngineInterface) {
       await $.store.set('report', result)
       // A zip that the sync has caught up with, or that an even newer commit
       // has overtaken, is no longer waiting for an upload.
-      const outdated = new Map((result as Report).items.map(i => [i.id, i]))
-      await update($, zips, built =>
+      const byId = new Map((result as Report).items.map(i => [i.id, i]))
+      const built = await read($, zips)
+      const uploaded = Object.entries(built).filter(([id]) => byId.get(id)?.status === 'current')
+      await update($, zips, now =>
         Object.fromEntries(
-          Object.entries(built).filter(([id, sha]) => outdated.get(id)?.status === 'outdated' && outdated.get(id)?.remoteSha === sha),
+          Object.entries(now).filter(([id, z]) => byId.get(id)?.status === 'outdated' && byId.get(id)?.remoteSha === z.sha),
         ),
       )
       await $.store.set('zips', await read($, zips))
+      // Uploaded: its zip has done its job.
+      for (const [, z] of uploaded) if (z.zip) await script($, ['trash', z.zip], 30_000)
+      if (uploaded.length > 0) {
+        const names = uploaded.map(([id]) => byId.get(id)?.name ?? id).join(', ')
+        $.ui.toast(`${names} uploaded to claude.ai · zip moved to the Trash`)
+      }
     } else {
       await update($, message, () => `Check failed: ${result.message}`)
     }
@@ -61,7 +71,7 @@ async function check($: EngineInterface) {
 async function updateOne($: EngineInterface, item: Item) {
   const result = await script($, ['update', item.id], 600_000)
   if (result.ok && result.zip && result.remoteSha) {
-    await update($, zips, built => ({ ...built, [item.id]: result.remoteSha }))
+    await update($, zips, built => ({ ...built, [item.id]: { sha: result.remoteSha, zip: result.zip } }))
     await $.store.set('zips', await read($, zips))
   }
   return result.ok ? result.message : `${item.name}: ${result.message}`
@@ -78,6 +88,19 @@ async function updateItems($: EngineInterface, items: Item[], label: string) {
   }
   await update($, message, () => lines.join('\n'))
   await check($)
+}
+
+// Checks again once the claude.ai skills have synced since the last check.
+async function pollSync($: EngineInterface) {
+  if ((await read($, busy)) || Object.keys(await read($, zips)).length === 0) return
+  const synced = await script($, ['synced'], 30_000)
+  const last = await read($, report)
+  if (synced.ok && last && synced.lastUpdated > last.checkedAt) await check($)
+}
+
+function tokens(delta: number | null | undefined) {
+  if (!delta) return ''
+  return ` · ${delta > 0 ? '+' : '−'}${Math.abs(delta)} tok`
 }
 
 function ago(ms: number) {
@@ -97,12 +120,19 @@ export const register: Register = on => {
     })
     const stored = (await $.store.get('report')) as Report | undefined
     if (stored && Array.isArray(stored.items)) await update($, report, () => stored)
-    const built = (await $.store.get('zips')) as Record<string, string> | undefined
-    if (built) await update($, zips, () => built)
+    // Before zips-2 the store held only the commit, not the zip's path.
+    const built = (await $.store.get('zips')) as Record<string, Zip | string> | undefined
+    if (built) {
+      const zipsNow = Object.fromEntries(
+        Object.entries(built).map(([id, z]) => [id, typeof z === 'string' ? { sha: z, zip: '' } : z]),
+      )
+      await update($, zips, () => zipsNow)
+    }
     void $.ui.open({ id: PANE, title: TITLE })
     const now = await $.clock.now()
     if (!stored || now - stored.checkedAt > STALE_MS) $.clock.after(5_000, () => void check($))
     $.clock.every(STALE_MS, () => void check($))
+    $.clock.every(SYNC_POLL_MS, () => void pollSync($))
     return started
   })
 
@@ -192,6 +222,7 @@ export const register: Register = on => {
                       {item.localVersion && item.remoteVersion && item.localVersion !== item.remoteVersion
                         ? ` · ${item.localVersion} → ${item.remoteVersion}`
                         : item.remoteVersion ? ` · → ${item.remoteVersion}` : ' · newer on GitHub'}
+                      {tokens(item.tokenDelta)}
                     </Text>
                   </Text>
                   {/* Where the new copy comes from, before anything is replaced. */}
