@@ -95,4 +95,4 @@ superpowers  plugin · 6.4.2 → 7.0.1 · +85 tok      Update
 - Anthropic's own skills update themselves and aren't listed.
 - **`+12 tok`** is roughly how many more tokens (or, with `−`, fewer) every message will carry after the update: the skill listing's name and description, and for a plugin the listings of all its skills, agents and commands. It's an estimate at about 4 characters a token, and leaves out MCP tools and hooks. A disabled plugin shows none.
 
-It checks when a session starts (at most every 12 hours), and on **Refresh** or `/skill-updates`. GitHub repos come from `github.com` links in each skill's files; add any it can't find to `sources.json` (`"skill-name": "owner/repo"`, or `"none"` to stop checking one). Needs the GitHub CLI (`gh`) signed in, and Python 3.
+It checks every time a session starts, every 12 hours while one runs, and on **Refresh** or `/skill-updates`. GitHub repos come from `github.com` links in each skill's files; add any it can't find to `sources.json` (`"skill-name": "owner/repo"`, or `"none"` to stop checking one). Needs the GitHub CLI (`gh`) signed in, and Python 3.

@@ -129,8 +129,8 @@ export const register: Register = on => {
       await update($, zips, () => zipsNow)
     }
     void $.ui.open({ id: PANE, title: TITLE })
-    const now = await $.clock.now()
-    if (!stored || now - stored.checkedAt > STALE_MS) $.clock.after(5_000, () => void check($))
+    // Every start checks again: the stored report only fills the pane until then.
+    $.clock.after(1_000, () => void check($))
     $.clock.every(STALE_MS, () => void check($))
     $.clock.every(SYNC_POLL_MS, () => void pollSync($))
     return started
