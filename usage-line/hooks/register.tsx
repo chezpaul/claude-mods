@@ -26,7 +26,7 @@ const DOTS = 6
 // Pro's prompt cache lives about an hour; warn a bit before.
 const CACHE_COOLING_MIN = 45
 const CACHE_COLD_MIN = 60
-// Below this a cold re-read is cheap enough not to interrupt.
+// Below this a cold re-read is cheap enough not to remind about.
 const COLD_PROMPT_MIN_TOKENS = 50_000
 
 // A handoff skill may be installed bare (`handoff`) or namespaced by a plugin or synced account (`anthropic-skills:handoff`).
@@ -133,30 +133,7 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
-    const now = await $.clock.now()
-    const last = await read($, lastActivity)
-    await saveActivity($, now)
-
-    // Cold cache + big context: the next message re-reads it all at full price.
-    const isColdReturn = !e.isMeta && !e.command && last !== null && now - last >= CACHE_COLD_MIN * 60_000
-    if (isColdReturn) {
-      const tokens = (await $.session.usage()).context.tokens ?? 0
-      if (tokens >= COLD_PROMPT_MIN_TOKENS) {
-        const mins = Math.floor((now - last) / 60_000)
-        const away = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`
-        const choice = await $.ui
-          .ask(`Cache is cold (${away} since the last message). Sending re-reads ~${Math.round(tokens / 1000)}k tokens at full price. Send anyway?`, {
-            header: 'Cold cache',
-            options: ['Send anyway', 'Start fresh instead'],
-          })
-          .catch(() => 'Send anyway')
-        // /handoff here would itself re-read the cold chat, so the cheap way out is a fresh start.
-        if (choice === 'Start fresh instead') {
-          $.ui.toast('Not sent. Run /clear, then send your message with a few lines of context.')
-          return { drop: 'Cold cache: start fresh instead' }
-        }
-      }
-    }
+    await saveActivity($, await $.clock.now())
     return next(e)
   })
 

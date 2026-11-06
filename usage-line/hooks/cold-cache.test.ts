@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 const USAGE = { startedAt: 0, context: { tokens: 300_000, window: 1_000_000, percent: 30 }, rateLimits: [] }
 
-test('a prompt after an hour with a big context asks first, and can be dropped', async ($, on) => {
+test('a prompt after an hour with a big context goes through without asking', async ($, on) => {
   const clock = mock.clock(on)
   mock.store(on)
   const asked: string[] = []
@@ -10,26 +10,18 @@ test('a prompt after an hour with a big context asks first, and can be dropped',
   on('session.id', () => ({ value: 's1' }))
   on('session.usage', () => ({ value: USAGE }))
   on('ui.toast', () => ({ value: undefined }))
-  // $.ui.ask is an AskUserQuestion tool call; answer it as the person would.
   on('tool.call', { tool: 'AskUserQuestion' }, (_, e) => {
-    const question = e.questions[0].question
-    asked.push(question)
-    return { result: { questions: e.questions, answers: { [question]: 'Start fresh instead' } } }
+    asked.push(e.questions[0].question)
+    return { result: { questions: e.questions, answers: {} } }
   })
   on('prompt.submit', (_, e) => ({ text: e.text }))
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.prompt.submit({ text: 'first' })
-  expect(asked.length).toBe(0)
-
-  await clock.advance(30 * 60_000)
-  await $.prompt.submit({ text: 'warm' })
-  expect(asked.length).toBe(0)
-
   await clock.advance(61 * 60_000)
   const result = await $.prompt.submit({ text: 'cold' })
-  expect(asked.length).toBe(1)
-  expect(result).toEqual({ drop: 'Cold cache: start fresh instead' })
+  expect(asked.length).toBe(0)
+  expect(result).toEqual({ text: 'cold' })
 })
 
 test('at 45 idle minutes in a big chat, a toast shows once and nothing is pushed', async ($, on) => {
