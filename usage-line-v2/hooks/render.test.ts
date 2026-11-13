@@ -12,6 +12,6 @@ test('a reopened thread draws every cell from stored limits and activity', async
   on('session.usage', () => ({ value: USAGE }))
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ plugin: 'usage-line-v2', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
-  for (const text of ['30%', '⧗\u00a050\u00a0min', '5H', '7%', 'Warm', '·\u00a050m\u00a0left']) expect(await ui.find({ type: 'Text', text })).toBeTruthy()
+  for (const text of ['30%', '5H', '7%', '7D', '44%', 'Warm', '50m', 'CLEAR', 'HANDOFF']) expect(await ui.find({ type: 'Text', text })).toBeTruthy()
   await ui.unmount()
 })

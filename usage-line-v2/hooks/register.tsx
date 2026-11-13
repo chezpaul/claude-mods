@@ -19,7 +19,6 @@ const GREEN = '#4cc764'
 const YELLOW = '#e6b84a'
 const RED = '#e5534b'
 const WARM = '#7cbf6a'
-const COOLING = '#5fb8b0'
 const COLD = '#5b9bf0'
 const HANDOFF = '#7fb8d6'
 const BAR_CELLS = 10
@@ -31,6 +30,7 @@ const CACHE_COLD_MIN = 60
 const CACHE_STAKE_MIN_TOKENS = 50_000
 
 const FIVE_HOUR_MS = 5 * 60 * 60_000
+const WEEK_MS = 7 * 24 * 60 * 60_000
 
 // A handoff skill may be installed bare (`handoff`) or namespaced by a plugin or synced account (`anthropic-skills:handoff`).
 export const runHandoff = async ($: EngineInterface) => {
@@ -103,15 +103,15 @@ export function untilReset(resetsAt: string | undefined, now: number): string {
 
 export type Plan = { pct: number; ahead: boolean; resetsAt?: string }
 
-// The 5-hour window; `ahead` when its usage outruns the share of the window gone by.
-export function planUsage(u: Usage, now: number): Plan | undefined {
-  if (u.fiveHour === undefined) return undefined
+// One limit window; `ahead` when its usage outruns the share of the window gone by.
+export function planUsage(pct: number | undefined, resetsAt: string | undefined, length: number, now: number): Plan | undefined {
+  if (pct === undefined) return undefined
   let ahead = false
-  if (u.fiveHourResetsAt) {
-    const elapsed = 1 - (Date.parse(u.fiveHourResetsAt) - now) / FIVE_HOUR_MS
-    ahead = u.fiveHour / 100 > Math.min(1, Math.max(0, elapsed))
+  if (resetsAt) {
+    const elapsed = 1 - (Date.parse(resetsAt) - now) / length
+    ahead = pct / 100 > Math.min(1, Math.max(0, elapsed))
   }
-  return { pct: Math.round(u.fiveHour), ahead, resetsAt: u.fiveHourResetsAt }
+  return { pct: Math.round(pct), ahead, resetsAt }
 }
 
 export const register: Register = on => {
@@ -188,7 +188,7 @@ export const register: Register = on => {
     const sep = (key: string) => cell(key, <Text mono color={MUTED}>│</Text>)
     const cells: RenderChildren[] = []
 
-    // Context: green under 50%, yellow under 80%, then red.
+    // Gradient bar: the context, green under 50%, yellow under 80%, then red.
     if (u.contextPct !== undefined) {
       const pct = Math.min(100, Math.max(0, Math.round(u.contextPct)))
       const filled = Math.round((pct / 100) * BAR_CELLS)
@@ -204,55 +204,55 @@ export const register: Register = on => {
       )
     }
 
-    // Cache countdown, beside the context it would re-read; blank when little is at stake.
-    const mins = last === null ? undefined : Math.floor((now - last) / 60000)
-    if (mins !== undefined && mins < CACHE_COLD_MIN && (u.contextTokens ?? 0) >= CACHE_STAKE_MIN_TOKENS) {
-      cells.push(cell('countdown', <Text mono weight="bold" color={YELLOW} wrap="truncate">{nb(`⧗ ${CACHE_COLD_MIN - mins} min`)}</Text>))
-    }
-
-    const plan = planUsage(u, now)
-    if (plan) {
+    // The 5-hour window, then the 7-day one: label, percent used, time until it resets.
+    const windows = [
+      { key: '5h', label: '5H', plan: planUsage(u.fiveHour, u.fiveHourResetsAt, FIVE_HOUR_MS, now) },
+      { key: '7d', label: '7D', plan: planUsage(u.week, u.weekResetsAt, WEEK_MS, now) },
+    ]
+    for (const { key, label, plan } of windows) {
+      if (!plan) continue
       const reset = untilReset(plan.resetsAt, now)
       const color = plan.pct < 50 ? GREEN : plan.pct < 80 ? YELLOW : RED
-      if (cells.length) cells.push(sep('s-plan'))
+      if (cells.length) cells.push(sep(`s-${key}`))
       cells.push(
-        <Box key="plan" flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
-          <Text mono weight="semibold" color={MUTED} wrap="truncate">5H</Text>
+        <Box key={key} flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
+          <Text mono weight="semibold" color={MUTED} wrap="truncate">{label}</Text>
           <Text mono weight="bold" color={color} wrap="truncate">{`${plan.pct}%${plan.ahead ? '↑' : ''}`}</Text>
           {reset ? <Text mono color={LABEL} wrap="truncate">{nb(reset)}</Text> : null}
         </Box>,
       )
     }
 
-    // Cache, as v1 drew it: its state, then the minutes left before it goes cold (or how long it has been cold).
+    // Cache: Warm with the minutes left before it goes cold, then Cold.
+    const mins = last === null ? undefined : Math.floor((now - last) / 60000)
     if (mins !== undefined) {
-      const state = mins >= CACHE_COLD_MIN ? 'Cold' : mins >= CACHE_COOLING_MIN ? 'Cooling' : 'Warm'
-      const color = state === 'Cold' ? COLD : state === 'Cooling' ? COOLING : WARM
-      const age = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`)
-      const detail = state === 'Cold' ? `${age(mins - CACHE_COLD_MIN)} ago` : `${CACHE_COLD_MIN - mins}m left`
+      const warm = mins < CACHE_COLD_MIN
       if (cells.length) cells.push(sep('s-cache'))
       cells.push(
         <Box key="cache" flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
-          <Text mono weight="semibold" color={MUTED} wrap="truncate">CACHE</Text>
-          <Text mono weight="bold" color={color} wrap="truncate">{state}</Text>
-          <Text mono color={MUTED} wrap="truncate">{nb(`· ${detail}`)}</Text>
+          <Text mono weight="bold" color={warm ? WARM : COLD} wrap="truncate">{warm ? 'Warm' : 'Cold'}</Text>
+          {warm ? <Text mono color={LABEL} wrap="truncate">{`${CACHE_COLD_MIN - mins}m`}</Text> : null}
         </Box>,
       )
     }
 
+    if (cells.length) cells.push(sep('s-buttons'))
+    cells.push(
+      <Box key="buttons" flexDirection="row" alignItems="center" gap="md" flexShrink={0}>
+        {/* Each runs its command, as typing it + Return would. */}
+        <Button key="clear" label="CLEAR" onPress={() => void $.command.run({ command: 'clear' })}>
+          <Text mono weight="bold" color={HANDOFF}>CLEAR</Text>
+        </Button>
+        <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
+          <Text mono weight="bold" color={HANDOFF}>HANDOFF</Text>
+        </Button>
+      </Box>,
+    )
+
+    // Left to right, one line; clips at the right when too wide.
     return (
-      <Box flexDirection="row" alignItems="center" gap="md" paddingX="md" paddingY={0}>
-        {/* When the row is too wide, the cells clip at the right so HANDOFF stays on screen. */}
-        <Box flexDirection="row" alignItems="center" gap="md" flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
-          {cells}
-        </Box>
-        <Box flexShrink={0} flexDirection="row" alignItems="center" gap="md">
-          {sep('s-handoff')}
-          {/* Runs the installed handoff command, as typing it + Return would. */}
-          <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
-            <Text mono weight="bold" color={HANDOFF}>HANDOFF</Text>
-          </Button>
-        </Box>
+      <Box flexDirection="row" alignItems="center" gap="md" paddingX="md" paddingY={0} overflow="hidden">
+        {cells}
       </Box>
     )
   })
