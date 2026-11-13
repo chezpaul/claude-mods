@@ -204,19 +204,18 @@ export const register: Register = on => {
       )
     }
 
-    // The 5-hour window, then the 7-day one: label, percent used, time until it resets.
+    // The 5-hour window, then the 7-day one: percent used, time until it resets.
     const windows = [
-      { key: '5h', label: '5H', plan: planUsage(u.fiveHour, u.fiveHourResetsAt, FIVE_HOUR_MS, now) },
-      { key: '7d', label: '7D', plan: planUsage(u.week, u.weekResetsAt, WEEK_MS, now) },
+      { key: '5h', plan: planUsage(u.fiveHour, u.fiveHourResetsAt, FIVE_HOUR_MS, now) },
+      { key: '7d', plan: planUsage(u.week, u.weekResetsAt, WEEK_MS, now) },
     ]
-    for (const { key, label, plan } of windows) {
+    for (const { key, plan } of windows) {
       if (!plan) continue
       const reset = untilReset(plan.resetsAt, now)
       const color = plan.pct < 50 ? GREEN : plan.pct < 80 ? YELLOW : RED
       if (cells.length) cells.push(sep(`s-${key}`))
       cells.push(
         <Box key={key} flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
-          <Text mono weight="semibold" color={MUTED} wrap="truncate">{label}</Text>
           <Text mono weight="bold" color={color} wrap="truncate">{`${plan.pct}%${plan.ahead ? '↑' : ''}`}</Text>
           {reset ? <Text mono color={LABEL} wrap="truncate">{nb(reset)}</Text> : null}
         </Box>,

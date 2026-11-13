@@ -49,11 +49,11 @@ Then restart Claude Code.
 ## usage-line-v2
 
 ```
-████░░░░░░ 42% │ 5H 73%↑ 1:48 │ 7D 54% 3d 15h │ Warm 48m │ CLEAR HANDOFF
+████░░░░░░ 42% │ 73%↑ 1:48 │ 54% 3d 15h │ Warm 48m │ CLEAR HANDOFF
 ```
 
 - **Context bar**: green under 50%, yellow under 80%, then red. Every message re-reads it.
-- **5H** and **7D**: percent of each limit window used, `↑` when usage runs ahead of the clock, then the time until it resets.
+- **5-hour, then 7-day limit**: percent of each window used, `↑` when usage runs ahead of the clock, then the time until it resets.
 - **Warm / Cold**: the prompt cache. Warm shows the minutes left before it goes cold (an hour after the last message); after that the next message re-reads the whole chat at full price.
 - **CLEAR**: runs `/clear`.
 - **HANDOFF**: runs `/handoff`. Needs a `handoff` skill or command installed.
