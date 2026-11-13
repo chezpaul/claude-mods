@@ -202,8 +202,13 @@ export const register: Register = on => {
     const root = await $.session.root()
     const { Box, Button, Text } = $.ui.resolve(e)
 
-    const sep = (key: string) => <Text key={key} mono color={MUTED}>│</Text>
-    const cells: RenderChildren[] = [<Text key="model" mono weight="bold" color={LABEL}>{model}</Text>]
+    // Every cell keeps its width and never wraps: the strip is one line, and clips at the right when too wide.
+    const nb = (text: string) => text.replace(/ /g, '\u00a0')
+    const cell = (key: string, child: RenderChildren) => (
+      <Box key={key} flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>{child}</Box>
+    )
+    const sep = (key: string) => cell(key, <Text mono color={MUTED}>│</Text>)
+    const cells: RenderChildren[] = [cell('model', <Text mono weight="bold" color={LABEL} wrap="truncate">{nb(model)}</Text>)]
 
     // Context: green under 50%, yellow under 80%, then red.
     if (u.contextPct !== undefined) {
@@ -212,12 +217,12 @@ export const register: Register = on => {
       const color = pct < 50 ? GREEN : pct < 80 ? YELLOW : RED
       cells.push(sep('s-ctx'))
       cells.push(
-        <Box key="ctx" flexDirection="row" alignItems="center" gap="sm">
-          <Text mono>
+        <Box key="ctx" flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
+          <Text mono wrap="truncate">
             <Text color={color}>{'█'.repeat(filled)}</Text>
             <Text color={MUTED}>{'░'.repeat(BAR_CELLS - filled)}</Text>
           </Text>
-          <Text mono weight="bold" color={color}>{pct}%</Text>
+          <Text mono weight="bold" color={color} wrap="truncate">{pct}%</Text>
         </Box>,
       )
     }
@@ -225,7 +230,7 @@ export const register: Register = on => {
     // Cache countdown, beside the context it would re-read; blank when little is at stake.
     const mins = last === null ? undefined : Math.floor((now - last) / 60000)
     if (mins !== undefined && mins < CACHE_COLD_MIN && (u.contextTokens ?? 0) >= CACHE_STAKE_MIN_TOKENS) {
-      cells.push(<Text key="countdown" mono weight="bold" color={YELLOW}>{`⧗ ${CACHE_COLD_MIN - mins} min`}</Text>)
+      cells.push(cell('countdown', <Text mono weight="bold" color={YELLOW} wrap="truncate">{nb(`⧗ ${CACHE_COLD_MIN - mins} min`)}</Text>))
     }
 
     const plan = planUsage(u, now)
@@ -234,9 +239,9 @@ export const register: Register = on => {
       const color = plan.pct < 50 ? GREEN : plan.pct < 80 ? YELLOW : RED
       cells.push(sep('s-plan'))
       cells.push(
-        <Box key="plan" flexDirection="row" alignItems="center" gap="sm">
-          <Text mono weight="bold" color={color}>{`${plan.pct}%${plan.ahead ? '↑' : ''}`}</Text>
-          {reset ? <Text mono color={LABEL}>{reset}</Text> : null}
+        <Box key="plan" flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
+          <Text mono weight="bold" color={color} wrap="truncate">{`${plan.pct}%${plan.ahead ? '↑' : ''}`}</Text>
+          {reset ? <Text mono color={LABEL} wrap="truncate">{nb(reset)}</Text> : null}
         </Box>,
       )
     }
@@ -244,16 +249,19 @@ export const register: Register = on => {
     // Project: press to open its folder.
     cells.push(sep('s-project'))
     cells.push(
-      <Button key="project" label={projectLabel(root)} onPress={() => void $.process.run(['open', root])}>
-        <Text mono color={LABEL} wrap="truncate">{projectLabel(root)}</Text>
-      </Button>,
+      cell(
+        'project',
+        <Button key="project" label={projectLabel(root)} onPress={() => void $.process.run(['open', root])}>
+          <Text mono color={LABEL} wrap="truncate">{nb(projectLabel(root))}</Text>
+        </Button>,
+      ),
     )
 
     if (mins !== undefined) {
       const state = mins >= CACHE_COLD_MIN ? 'Cold' : mins >= CACHE_COOLING_MIN ? 'Cooling' : 'Warm'
       const color = state === 'Cold' ? COLD : state === 'Cooling' ? COOLING : WARM
       cells.push(sep('s-cache'))
-      cells.push(<Text key="cache" mono weight="bold" color={color}>{state}</Text>)
+      cells.push(cell('cache', <Text mono weight="bold" color={color} wrap="truncate">{state}</Text>))
     }
 
     return (
