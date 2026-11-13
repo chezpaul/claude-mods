@@ -56,8 +56,7 @@ Opus 5.5 │ ████░░░░░░ 42% ⧗ 12 min │ 73%↑ 1:48 │ C
 - **Context bar**: green under 50%, yellow under 80%, then red. Every message re-reads it.
 - **⧗ countdown**: minutes until the prompt cache expires (an hour after the last message); after that the next message re-reads the whole chat at full price. Blank when the chat is under 50k tokens.
 - **Plan usage**: the 5-hour or weekly window closest to its limit. `↑` means usage is running ahead of the clock. Then the time until that window resets (`1:48`, or `3d 4h`).
-- **Project**: the last two folders of the project path; press to open it in Finder.
-- **Cache temperature**: Warm under 45 min idle, Cooling to 60, Cold after.
+- **CACHE**: Warm under 45 min idle, Cooling to 60, Cold after; then the minutes left before it goes cold (or how long ago it did).
 - **HANDOFF**: runs `/handoff`. Needs a `handoff` skill or command installed.
 - Same warnings as usage-line: context at 40/60/80%, 5-hour limit at 50/75/90%, and a reminder at 45 idle minutes in a big chat.
 
