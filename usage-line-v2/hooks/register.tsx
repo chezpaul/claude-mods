@@ -31,7 +31,6 @@ const CACHE_COLD_MIN = 60
 const CACHE_STAKE_MIN_TOKENS = 50_000
 
 const FIVE_HOUR_MS = 5 * 60 * 60_000
-const WEEK_MS = 7 * 24 * 60 * 60_000
 
 // A handoff skill may be installed bare (`handoff`) or namespaced by a plugin or synced account (`anthropic-skills:handoff`).
 export const runHandoff = async ($: EngineInterface) => {
@@ -39,15 +38,6 @@ export const runHandoff = async ($: EngineInterface) => {
   const command = names.find(n => n === 'handoff') ?? names.find(n => n.endsWith(':handoff'))
   if (command) await $.command.run({ command })
   else $.ui.toast('No handoff skill or command installed.')
-}
-
-// `claude-opus-5-5[1m]` reads as `Opus 5.5`; anything else is shown as the engine names it.
-export function modelLabel(model: string): string {
-  const id = model.replace(/\[[^\]]*\]$/, '')
-  const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/.exec(id)
-  if (!m) return id
-  const [, family = '', major, minor] = m
-  return `${family.charAt(0).toUpperCase()}${family.slice(1)} ${major}${minor ? `.${minor}` : ''}`
 }
 
 // `compactAt` is the window auto-compaction measures against (what the app's Context % uses), smaller than the model's.
@@ -113,20 +103,15 @@ export function untilReset(resetsAt: string | undefined, now: number): string {
 
 export type Plan = { pct: number; ahead: boolean; resetsAt?: string }
 
-// The window closest to its limit; `ahead` when its usage outruns the share of the window gone by.
+// The 5-hour window; `ahead` when its usage outruns the share of the window gone by.
 export function planUsage(u: Usage, now: number): Plan | undefined {
-  const windows = [
-    { pct: u.fiveHour, resetsAt: u.fiveHourResetsAt, length: FIVE_HOUR_MS },
-    { pct: u.week, resetsAt: u.weekResetsAt, length: WEEK_MS },
-  ].filter((w): w is { pct: number; resetsAt: string | undefined; length: number } => w.pct !== undefined)
-  if (!windows.length) return undefined
-  const top = windows.reduce((a, b) => (b.pct > a.pct ? b : a))
+  if (u.fiveHour === undefined) return undefined
   let ahead = false
-  if (top.resetsAt) {
-    const elapsed = 1 - (Date.parse(top.resetsAt) - now) / top.length
-    ahead = top.pct / 100 > Math.min(1, Math.max(0, elapsed))
+  if (u.fiveHourResetsAt) {
+    const elapsed = 1 - (Date.parse(u.fiveHourResetsAt) - now) / FIVE_HOUR_MS
+    ahead = u.fiveHour / 100 > Math.min(1, Math.max(0, elapsed))
   }
-  return { pct: Math.round(top.pct), ahead, resetsAt: top.resetsAt }
+  return { pct: Math.round(u.fiveHour), ahead, resetsAt: u.fiveHourResetsAt }
 }
 
 export const register: Register = on => {
@@ -193,7 +178,6 @@ export const register: Register = on => {
     const now = await $.clock.now()
     await read($, tick)
     const last = await read($, lastActivity)
-    const model = modelLabel(await $.session.model())
     const { Box, Button, Text } = $.ui.resolve(e)
 
     // Every cell keeps its width and never wraps: the strip is one line, and clips at the right when too wide.
@@ -202,14 +186,13 @@ export const register: Register = on => {
       <Box key={key} flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>{child}</Box>
     )
     const sep = (key: string) => cell(key, <Text mono color={MUTED}>│</Text>)
-    const cells: RenderChildren[] = [cell('model', <Text mono weight="bold" color={LABEL} wrap="truncate">{nb(model)}</Text>)]
+    const cells: RenderChildren[] = []
 
     // Context: green under 50%, yellow under 80%, then red.
     if (u.contextPct !== undefined) {
       const pct = Math.min(100, Math.max(0, Math.round(u.contextPct)))
       const filled = Math.round((pct / 100) * BAR_CELLS)
       const color = pct < 50 ? GREEN : pct < 80 ? YELLOW : RED
-      cells.push(sep('s-ctx'))
       cells.push(
         <Box key="ctx" flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
           <Text mono wrap="truncate">
@@ -231,9 +214,10 @@ export const register: Register = on => {
     if (plan) {
       const reset = untilReset(plan.resetsAt, now)
       const color = plan.pct < 50 ? GREEN : plan.pct < 80 ? YELLOW : RED
-      cells.push(sep('s-plan'))
+      if (cells.length) cells.push(sep('s-plan'))
       cells.push(
         <Box key="plan" flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
+          <Text mono weight="semibold" color={MUTED} wrap="truncate">5H</Text>
           <Text mono weight="bold" color={color} wrap="truncate">{`${plan.pct}%${plan.ahead ? '↑' : ''}`}</Text>
           {reset ? <Text mono color={LABEL} wrap="truncate">{nb(reset)}</Text> : null}
         </Box>,
@@ -246,7 +230,7 @@ export const register: Register = on => {
       const color = state === 'Cold' ? COLD : state === 'Cooling' ? COOLING : WARM
       const age = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`)
       const detail = state === 'Cold' ? `${age(mins - CACHE_COLD_MIN)} ago` : `${CACHE_COLD_MIN - mins}m left`
-      cells.push(sep('s-cache'))
+      if (cells.length) cells.push(sep('s-cache'))
       cells.push(
         <Box key="cache" flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
           <Text mono weight="semibold" color={MUTED} wrap="truncate">CACHE</Text>

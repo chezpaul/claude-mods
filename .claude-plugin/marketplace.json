@@ -12,7 +12,7 @@
     {
       "name": "usage-line-v2",
       "source": "./usage-line-v2",
-      "description": "One-line status strip: model, context bar, cache countdown, plan usage with pace and reset, cache state, and a Handoff button"
+      "description": "One-line status strip: context bar, cache countdown, 5-hour usage with pace and reset, cache state, and a Handoff button"
     },
     {
       "name": "handoff-before-cold",
