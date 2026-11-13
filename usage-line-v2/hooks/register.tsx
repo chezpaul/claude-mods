@@ -50,11 +50,6 @@ export function modelLabel(model: string): string {
   return `${family.charAt(0).toUpperCase()}${family.slice(1)} ${major}${minor ? `.${minor}` : ''}`
 }
 
-// The last two folders of the project path, as `libs/Dress-Code`.
-export function projectLabel(root: string): string {
-  return root.split('/').filter(Boolean).slice(-2).join('/') || root
-}
-
 // `compactAt` is the window auto-compaction measures against (what the app's Context % uses), smaller than the model's.
 const toUsage = (m: Pick<SessionMeasureInput, 'context' | 'rateLimits'>, compactAt?: number): Usage => {
   const five = m.rateLimits.find(r => r.kind === 'five_hour')
@@ -199,7 +194,6 @@ export const register: Register = on => {
     await read($, tick)
     const last = await read($, lastActivity)
     const model = modelLabel(await $.session.model())
-    const root = await $.session.root()
     const { Box, Button, Text } = $.ui.resolve(e)
 
     // Every cell keeps its width and never wraps: the strip is one line, and clips at the right when too wide.
@@ -246,22 +240,20 @@ export const register: Register = on => {
       )
     }
 
-    // Project: press to open its folder.
-    cells.push(sep('s-project'))
-    cells.push(
-      cell(
-        'project',
-        <Button key="project" label={projectLabel(root)} onPress={() => void $.process.run(['open', root])}>
-          <Text mono color={LABEL} wrap="truncate">{nb(projectLabel(root))}</Text>
-        </Button>,
-      ),
-    )
-
+    // Cache, as v1 drew it: its state, then the minutes left before it goes cold (or how long it has been cold).
     if (mins !== undefined) {
       const state = mins >= CACHE_COLD_MIN ? 'Cold' : mins >= CACHE_COOLING_MIN ? 'Cooling' : 'Warm'
       const color = state === 'Cold' ? COLD : state === 'Cooling' ? COOLING : WARM
+      const age = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`)
+      const detail = state === 'Cold' ? `${age(mins - CACHE_COLD_MIN)} ago` : `${CACHE_COLD_MIN - mins}m left`
       cells.push(sep('s-cache'))
-      cells.push(cell('cache', <Text mono weight="bold" color={color} wrap="truncate">{state}</Text>))
+      cells.push(
+        <Box key="cache" flexDirection="row" alignItems="center" gap="sm" flexShrink={0}>
+          <Text mono weight="semibold" color={MUTED} wrap="truncate">CACHE</Text>
+          <Text mono weight="bold" color={color} wrap="truncate">{state}</Text>
+          <Text mono color={MUTED} wrap="truncate">{nb(`· ${detail}`)}</Text>
+        </Box>,
+      )
     }
 
     return (

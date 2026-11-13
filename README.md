@@ -5,7 +5,7 @@ Mods for Claude Code (terminal and the desktop app's Code tab).
 | Mod | What it does |
 | --- | --- |
 | [usage-line](./usage-line) | Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age (Warm / Cooling / Cold), and context use. Pops up a warning when a session's context or cost gets high. |
-| [usage-line-v2](./usage-line-v2) | One-line strip above the prompt: model, context bar, cache countdown, plan usage with pace and reset time, project (opens its folder), cache temperature, and a **HANDOFF** button. |
+| [usage-line-v2](./usage-line-v2) | One-line strip above the prompt: model, context bar, cache countdown, plan usage with pace and reset time, cache state with minutes left, and a **HANDOFF** button. |
 | [skill-updates](./skill-updates) | Sidebar pane listing skills and plugins that are behind their GitHub source, with an **Update all** button. |
 | [handoff-before-cold](./handoff-before-cold) | Runs `/handoff` by itself at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff. |
 
@@ -49,7 +49,7 @@ Then restart Claude Code.
 ## usage-line-v2
 
 ```
-Opus 5.5 │ ████░░░░░░ 42% ⧗ 12 min │ 73%↑ 1:48 │ libs/Dress-Code │ Warm │ HANDOFF
+Opus 5.5 │ ████░░░░░░ 42% ⧗ 12 min │ 73%↑ 1:48 │ CACHE Warm · 48m left │ HANDOFF
 ```
 
 - **Model**: who's answering now.

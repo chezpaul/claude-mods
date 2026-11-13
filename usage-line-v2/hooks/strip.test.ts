@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { modelLabel, planUsage, projectLabel, untilReset } from './register'
+import { modelLabel, planUsage, untilReset } from './register'
 
 const NOW = Date.parse('2026-11-12T12:00:00Z')
 const at = (mins: number) => new Date(NOW + mins * 60_000).toISOString()
@@ -10,11 +10,6 @@ test('model ids read as family and version', async () => {
   expect(modelLabel('claude-sonnet-5-5[1m]')).toBe('Sonnet 5.5')
   expect(modelLabel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5')
   expect(modelLabel('Opus 5.5')).toBe('Opus 5.5')
-})
-
-test('project shows its last two folders', async () => {
-  expect(projectLabel('/Users/me/libs/Dress-Code')).toBe('libs/Dress-Code')
-  expect(projectLabel('/')).toBe('/')
 })
 
 test('reset reads h:mm under a day, days beyond', async () => {
