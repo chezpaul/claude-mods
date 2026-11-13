@@ -10,6 +10,11 @@
       "description": "Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age, context use"
     },
     {
+      "name": "usage-line-v2",
+      "source": "./usage-line-v2",
+      "description": "One-line status strip: model, context bar, cache countdown, plan usage with pace and reset, project, cache temperature, and a Handoff button"
+    },
+    {
       "name": "handoff-before-cold",
       "source": "./handoff-before-cold",
       "description": "Runs /handoff at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff"

@@ -5,6 +5,7 @@ Mods for Claude Code (terminal and the desktop app's Code tab).
 | Mod | What it does |
 | --- | --- |
 | [usage-line](./usage-line) | Usage strip above the prompt: 5-hour and weekly limits, prompt-cache age (Warm / Cooling / Cold), and context use. Pops up a warning when a session's context or cost gets high. |
+| [usage-line-v2](./usage-line-v2) | One-line strip above the prompt: model, context bar, cache countdown, plan usage with pace and reset time, project (opens its folder), cache temperature, and a **HANDOFF** button. |
 | [skill-updates](./skill-updates) | Sidebar pane listing skills and plugins that are behind their GitHub source, with an **Update all** button. |
 | [handoff-before-cold](./handoff-before-cold) | Runs `/handoff` by itself at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff. |
 
@@ -14,6 +15,7 @@ At the prompt of a terminal Claude Code session:
 
 ```
 /plugin install usage-line --marketplace chezpaul/claude-mods
+/plugin install usage-line-v2 --marketplace chezpaul/claude-mods
 /plugin install handoff-before-cold --marketplace chezpaul/claude-mods
 /plugin install skill-updates --marketplace chezpaul/claude-mods
 ```
@@ -43,6 +45,23 @@ claude plugin update usage-line
 ```
 
 Then restart Claude Code.
+
+## usage-line-v2
+
+```
+Opus 5.5 │ ████░░░░░░ 42% ⧗ 12 min │ 73%↑ 1:48 │ libs/Dress-Code │ Warm │ HANDOFF
+```
+
+- **Model**: who's answering now.
+- **Context bar**: green under 50%, yellow under 80%, then red. Every message re-reads it.
+- **⧗ countdown**: minutes until the prompt cache expires (an hour after the last message); after that the next message re-reads the whole chat at full price. Blank when the chat is under 50k tokens.
+- **Plan usage**: the 5-hour or weekly window closest to its limit. `↑` means usage is running ahead of the clock. Then the time until that window resets (`1:48`, or `3d 4h`).
+- **Project**: the last two folders of the project path; press to open it in Finder.
+- **Cache temperature**: Warm under 45 min idle, Cooling to 60, Cold after.
+- **HANDOFF**: runs `/handoff`. Needs a `handoff` skill or command installed.
+- Same warnings as usage-line: context at 40/60/80%, 5-hour limit at 50/75/90%, and a reminder at 45 idle minutes in a big chat.
+
+Draws as a band above the prompt in the terminal and the desktop app. Don't run it beside usage-line, or you get two bands.
 
 ## usage-line
 

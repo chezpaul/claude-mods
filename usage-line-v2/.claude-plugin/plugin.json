@@ -1,0 +1,10 @@
+{
+  "name": "usage-line-v2",
+  "version": "0.1.0",
+  "description": "One-line status strip: model, context bar, cache countdown, plan usage with pace and reset, project, cache temperature, and a Handoff button",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "chezpaul"
+  },
+  "license": "MIT"
+}
