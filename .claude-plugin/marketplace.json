@@ -23,6 +23,11 @@
       "name": "skill-updates",
       "source": "./skill-updates",
       "description": "Sidebar pane that checks your skills and plugins against their GitHub sources and updates them in one press"
+    },
+    {
+      "name": "cold-thread-alert",
+      "source": "./cold-thread-alert",
+      "description": "POSTs the thread's title to a webhook (e.g. Home Assistant) at 55 idle minutes, before the prompt cache goes cold"
     }
   ]
 }

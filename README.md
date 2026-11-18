@@ -8,6 +8,7 @@ Mods for Claude Code (terminal and the desktop app's Code tab).
 | [usage-line-v2](./usage-line-v2) | One-line strip above the prompt: context bar, 5-hour and 7-day usage with pace and reset time, cache state with minutes left, and **CLEAR** and **HANDOFF** buttons. |
 | [skill-updates](./skill-updates) | Sidebar pane listing skills and plugins that are behind their GitHub source, with an **Update all** button. |
 | [handoff-before-cold](./handoff-before-cold) | Runs `/handoff` by itself at 59 idle minutes, just before the prompt cache goes cold, unless the last turn was already a handoff. |
+| [cold-thread-alert](./cold-thread-alert) | At 55 idle minutes, POSTs the thread's title to a webhook (for example Home Assistant, to announce it on a speaker) so you can get back before the prompt cache goes cold. |
 
 ## Install
 
@@ -18,6 +19,7 @@ At the prompt of a terminal Claude Code session:
 /plugin install usage-line-v2 --marketplace chezpaul/claude-mods
 /plugin install handoff-before-cold --marketplace chezpaul/claude-mods
 /plugin install skill-updates --marketplace chezpaul/claude-mods
+/plugin install cold-thread-alert --marketplace chezpaul/claude-mods
 ```
 
 From a shell:
@@ -83,6 +85,44 @@ The prompt cache lasts an hour from the last message. 59 minutes after a turn en
 - Skips it when the last turn was already a handoff, whether you typed `/handoff` or asked Claude to write one, and after `/clear`.
 - A new message restarts the countdown. After an auto-handoff it doesn't fire again until you send something else.
 - Only runs while the session is open and the Mac is awake. Each open idle session hands off on its own.
+
+## cold-thread-alert
+
+The prompt cache lasts an hour from the last message. 55 minutes after a turn ends with nothing new, this mod sends a POST to a webhook so something outside Claude can tell you a thread is about to go cold.
+
+Set the webhook in `~/.claude/settings.json`:
+
+```json
+{ "env": { "COLD_THREAD_WEBHOOK": "https://your-home-assistant:8123/api/webhook/<random id>" } }
+```
+
+Optional: `COLD_THREAD_MINUTES` (1 to 59, default 55).
+
+The body is JSON: `thread` (the session's title, else the project folder's name), `project`, `idle_minutes` and `session_id`.
+
+- Skips it when the last turn was a handoff (the thread is saved) and after `/clear`. Pairs with handoff-before-cold, which hands off at 59 minutes.
+- A new message restarts the countdown. One alert per idle stretch.
+- Only runs while the session is open and the Mac is awake.
+- Treat the webhook id like a password: anyone who has it can trigger the alert.
+
+A Home Assistant automation that chimes and announces it:
+
+```yaml
+- alias: Claude thread about to go cold
+  mode: queued
+  triggers:
+    - trigger: webhook
+      webhook_id: !secret claude_cold_webhook
+      allowed_methods: [POST]
+      local_only: false
+  actions:
+    - action: chime_tts.say
+      target:
+        entity_id: media_player.your_speaker
+      data:
+        chime_path: marimba
+        message: "The Claude thread {{ trigger.json.thread }} is about to go cold."
+```
 
 ## skill-updates
 

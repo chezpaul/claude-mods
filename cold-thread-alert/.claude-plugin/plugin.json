@@ -1,0 +1,9 @@
+{
+  "name": "cold-thread-alert",
+  "version": "0.1.0",
+  "description": "POSTs the thread's title to a webhook (e.g. Home Assistant) at 55 idle minutes, before the prompt cache goes cold",
+  "author": {
+    "name": "chezpaul"
+  },
+  "license": "MIT"
+}
