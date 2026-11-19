@@ -9,6 +9,6 @@ export type Usage = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'usage-line-v2': { usage: Usage; lastActivity: number | null; tick: number }
+    'usage-line-v2': { usage: Usage; lastActivity: number | null; tick: number; handoffPending: boolean }
   }
 }

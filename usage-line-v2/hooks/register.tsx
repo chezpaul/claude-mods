@@ -7,6 +7,8 @@ const usage = atom({ plugin: 'usage-line-v2', key: 'usage' } as const, {})
 const lastActivity = atom({ plugin: 'usage-line-v2', key: 'lastActivity' } as const, null)
 // Bumped every minute so the countdowns redraw.
 const tick = atom({ plugin: 'usage-line-v2', key: 'tick' } as const, 0)
+// True from a HANDOFF press until its run settles, so repeat presses don't queue more runs.
+const handoffPending = atom({ plugin: 'usage-line-v2', key: 'handoffPending' } as const, false)
 
 // Warn once per level: context per session (what each message re-reads), 5-hour limit per window.
 const CONTEXT_WARN = [40, 60, 80]
@@ -33,11 +35,38 @@ const FIVE_HOUR_MS = 5 * 60 * 60_000
 const WEEK_MS = 7 * 24 * 60 * 60_000
 
 // A handoff skill may be installed bare (`handoff`) or namespaced by a plugin or synced account (`anthropic-skills:handoff`).
-export const runHandoff = async ($: EngineInterface) => {
-  const names = (await $.command.list()).map(c => c.name)
-  const command = names.find(n => n === 'handoff') ?? names.find(n => n.endsWith(':handoff'))
-  if (command) await $.command.run({ command })
-  else $.ui.toast('No handoff skill or command installed.')
+// `$.command.run` queues until the session is idle, so a press mid-turn waits for the turn to end:
+// say so, and ignore further presses until the queued run settles.
+export const runHandoff = async ($: EngineInterface, isWorking = false) => {
+  if (await read($, handoffPending)) {
+    $.ui.toast('Handoff already queued: it runs when the current turn ends.')
+    return
+  }
+  await update($, handoffPending, () => true)
+  try {
+    const names = (await $.command.list()).map(c => c.name)
+    const command = names.find(n => n === 'handoff') ?? names.find(n => n.endsWith(':handoff'))
+    if (!command) {
+      $.ui.toast('No handoff skill or command installed.')
+      return
+    }
+    if (isWorking) $.ui.toast('Handoff queued: it runs when the current turn ends.')
+    await $.command.run({ command })
+  } catch (err) {
+    $.ui.toast(`Handoff failed: ${err instanceof Error ? err.message : String(err)}`)
+  } finally {
+    await update($, handoffPending, () => false)
+  }
+}
+
+// CLEAR queues the same way; a failure is shown instead of dropped.
+const runClear = async ($: EngineInterface, isWorking: boolean) => {
+  if (isWorking) $.ui.toast('Clear queued: it runs when the current turn ends.')
+  try {
+    await $.command.run({ command: 'clear' })
+  } catch (err) {
+    $.ui.toast(`Clear failed: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }
 
 // `compactAt` is the window auto-compaction measures against (what the app's Context % uses), smaller than the model's.
@@ -119,6 +148,8 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    // A reload keeps $.state but drops the run that set this, which would leave HANDOFF dead.
+    await update($, handoffPending, () => false)
     const full = await $.session.usage({ breakdown: 'summary' })
     const u = await withLimits($, toUsage(full, full.context.breakdown?.rawMaxTokens), await $.clock.now())
     await update($, usage, () => u)
@@ -178,6 +209,7 @@ export const register: Register = on => {
     const now = await $.clock.now()
     await read($, tick)
     const last = await read($, lastActivity)
+    const pending = await read($, handoffPending)
     const { Box, Button, Text } = $.ui.resolve(e)
 
     // Every cell keeps its width and never wraps: the strip is one line, and clips at the right when too wide.
@@ -239,11 +271,11 @@ export const register: Register = on => {
     cells.push(
       <Box key="buttons" flexDirection="row" alignItems="center" gap="md" flexShrink={0}>
         {/* Each runs its command, as typing it + Return would. */}
-        <Button key="clear" label="CLEAR" onPress={() => void $.command.run({ command: 'clear' })}>
+        <Button key="clear" label="CLEAR" onPress={() => void runClear($, e.props.isWorking)}>
           <Text mono weight="bold" color={HANDOFF}>CLEAR</Text>
         </Button>
-        <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($)}>
-          <Text mono weight="bold" color={HANDOFF}>HANDOFF</Text>
+        <Button key="handoff" label="HANDOFF" onPress={() => void runHandoff($, e.props.isWorking)}>
+          <Text mono weight="bold" color={pending ? MUTED : HANDOFF}>{pending ? 'HANDOFF…' : 'HANDOFF'}</Text>
         </Button>
       </Box>,
     )

@@ -1,6 +1,6 @@
 {
   "name": "usage-line-v2",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "One-line status strip: model, context bar, cache countdown, plan usage with pace and reset, cache state, and a Handoff button",
   "types": "./types/index.d.ts",
   "author": {
