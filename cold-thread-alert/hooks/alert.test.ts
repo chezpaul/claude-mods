@@ -7,9 +7,12 @@ const prompt = (text: string, command?: { name: string; args: string }) =>
   ({ text, command, wait: true, origin: { kind: 'composer' as const } })
 const turnEnd = (turnId: string) => ({ answer: '', durationMs: 1, isAborted: false, turnId, reason: 'answer' as const })
 
-const setup = (on: On, posts: string[]) => {
+const setup = (on: On, posts: string[], stored?: Record<string, unknown>) => {
   on('prompt.submit', (_, e) => ({ text: e.text }))
   on('turn.complete', () => ({ text: '' }))
+  on('session.measure', (_, e) => ({ changed: e.changed }))
+  on('classic.StopFailure', () => ({}))
+  mock.store(on, stored)
   mock.env(on, { COLD_THREAD_WEBHOOK: URL })
   on('ui.toast', (_, e) => (posts.push(`toast ${e.text}`), { value: undefined }))
   on('http.fetch', (_, e) => (
@@ -78,4 +81,73 @@ test('no webhook set: a toast, no request', async ($, on) => {
   await $.turn.complete(turnEnd('t1'))
   await clock.advance(55 * 60_000)
   expect(posts).toEqual(['toast cold-thread-alert: set COLD_THREAD_WEBHOOK in settings.json env.'])
+})
+
+const HOUR = 60 * 60_000
+const window = (kind: string, percentUsed: number, resetsAt: number) =>
+  ({ kind, percentUsed, resetsAt: new Date(resetsAt).toISOString() })
+const measure = (rateLimits: ReturnType<typeof window>[]) =>
+  ({ context: { window: 200_000 } as never, rateLimits, changed: ['rateLimits' as const] })
+const usage = (on: On, rateLimits: ReturnType<typeof window>[]) =>
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits } as never }))
+
+test('no alert while the 5-hour window reads 100 %', async ($, on) => {
+  const clock = mock.clock(on)
+  const posts: string[] = []
+  setup(on, posts)
+  const now = clock.now()
+  await $.prompt.submit(prompt('x'))
+  await $.session.measure(measure([window('five_hour', 100, now + 2 * HOUR)]))
+  await $.turn.complete(turnEnd('t1'))
+  await clock.advance(70 * 60_000)
+  expect(posts).toEqual([])
+})
+
+test('a turn that died on rate_limit silences alerts until the fullest window resets', async ($, on) => {
+  const clock = mock.clock(on)
+  const posts: string[] = []
+  setup(on, posts)
+  const now = clock.now()
+  usage(on, [window('five_hour', 97, now + 3 * HOUR), window('seven_day', 40, now + 90 * HOUR)])
+  await $.prompt.submit(prompt('x'))
+  await $.classic.StopFailure({ error: 'rate_limit' })
+  await $.turn.complete({ ...turnEnd('t1'), reason: 'error' as const })
+  await clock.advance(70 * 60_000)
+  expect(posts).toEqual([])
+})
+
+test('once the window has reset, alerts come back', async ($, on) => {
+  const clock = mock.clock(on)
+  const posts: string[] = []
+  setup(on, posts)
+  const now = clock.now()
+  await $.prompt.submit(prompt('x'))
+  await $.session.measure(measure([window('five_hour', 100, now + 30 * 60_000)]))
+  await $.turn.complete(turnEnd('t1'))
+  await clock.advance(55 * 60_000)
+  expect(posts.length).toBe(1)
+})
+
+test('a high but not used-up window still alerts', async ($, on) => {
+  const clock = mock.clock(on)
+  const posts: string[] = []
+  setup(on, posts)
+  const now = clock.now()
+  usage(on, [window('five_hour', 92, now + 2 * HOUR)])
+  await $.prompt.submit(prompt('x'))
+  await $.session.measure(measure([window('five_hour', 92, now + 2 * HOUR)]))
+  await $.turn.complete(turnEnd('t1'))
+  await clock.advance(55 * 60_000)
+  expect(posts.length).toBe(1)
+})
+
+test("one thread's limit hit silences another thread's alert", async ($, on) => {
+  const clock = mock.clock(on)
+  const posts: string[] = []
+  // Another thread stored the hit; this one never saw a 100 % reading.
+  setup(on, posts, { limitedUntil: clock.now() + 2 * HOUR })
+  await $.prompt.submit(prompt('x'))
+  await $.turn.complete(turnEnd('t1'))
+  await clock.advance(70 * 60_000)
+  expect(posts).toEqual([])
 })

@@ -102,6 +102,7 @@ The body is JSON: `thread` (the session's title, else the project folder's name)
 
 - Skips it when the last turn was a handoff (the thread is saved) and after `/clear`. Pairs with handoff-before-cold, which hands off at 59 minutes.
 - A new message restarts the countdown. One alert per idle stretch.
+- Skips it while your 5-hour or weekly usage limit is reached, until that window resets: every thread stops at once then, and a warm cache is no use until the reset. One thread hitting the limit silences the others too.
 - Only runs while the session is open and the Mac is awake.
 - Treat the webhook id like a password: anyone who has it can trigger the alert.
 

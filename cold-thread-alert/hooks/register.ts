@@ -1,4 +1,4 @@
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, Register, SessionRateLimit, Timer } from 'claude-code'
 
 // The prompt cache lives an hour from the last request. Warn a few minutes before.
 const DEFAULT_MINUTES = 55
@@ -39,6 +39,43 @@ const threadTitle = async ($: EngineInterface): Promise<string> => {
     // No transcript on this machine: fall back to the folder name.
   }
   return (await folderName($)) || 'Claude'
+}
+
+// Hitting the 5-hour or weekly limit stops every thread at once, so their alerts all
+// land together, and a warm cache is no use until the window resets. Until then: no alert.
+// Kept in the store, as the limit is the account's: one thread's hit covers the others.
+const LIMITED_UNTIL = 'limitedUntil'
+const FIVE_HOUR_MS = 5 * 60 * 60_000
+const isLimitWindow = (r: SessionRateLimit) => r.kind === 'five_hour' || r.kind === 'seven_day'
+const resetOf = (r: SessionRateLimit, now: number) => (r.resetsAt ? Date.parse(r.resetsAt) : now + FIVE_HOUR_MS)
+
+// The latest reset of a window used up (100 %), if any.
+export const usedUpUntil = (limits: readonly SessionRateLimit[], now: number): number | undefined => {
+  const ends = limits.filter(r => isLimitWindow(r) && r.percentUsed >= 100).map(r => resetOf(r, now)).filter(t => t > now)
+  return ends.length ? Math.max(...ends) : undefined
+}
+
+// A turn that died on `rate_limit`: the fullest window is the one hit.
+export const hitUntil = (limits: readonly SessionRateLimit[], now: number): number => {
+  const fullest = limits.filter(isLimitWindow).sort((a, b) => b.percentUsed - a.percentUsed)[0]
+  const t = fullest ? resetOf(fullest, now) : now + FIVE_HOUR_MS
+  return t > now ? t : now + FIVE_HOUR_MS
+}
+
+const liveLimits = async ($: EngineInterface): Promise<readonly SessionRateLimit[]> =>
+  (await safe(async () => (await $.session.usage())?.rateLimits, undefined)) ?? []
+
+const markLimited = async ($: EngineInterface, until: number | undefined) => {
+  if (until === undefined) return
+  const saved = Number(await safe(() => $.store.get(LIMITED_UNTIL), 0)) || 0
+  if (until > saved) await $.store.set(LIMITED_UNTIL, until)
+}
+
+const isLimited = async ($: EngineInterface) => {
+  const now = await $.clock.now()
+  const saved = Number(await safe(() => $.store.get(LIMITED_UNTIL), 0)) || 0
+  if (saved > now) return true
+  return usedUpUntil(await liveLimits($), now) !== undefined
 }
 
 const minutes = async ($: EngineInterface) => {
@@ -97,6 +134,21 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
+  // A window reading 100 %.
+  on('session.measure', async ($, e, next) => {
+    void markLimited($, usedUpUntil(e.rateLimits, await $.clock.now())).catch(() => {})
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // A turn the limit ended (retries exhausted on `rate_limit`).
+  on('classic.StopFailure', async ($, e, next) => {
+    if (e.error === 'rate_limit' && !e.agent_id) {
+      const now = await $.clock.now()
+      await markLimited($, hitUntil(await liveLimits($), now)).catch(() => {})
+    }
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   // Every main-loop turn end is the last request so far: restart the countdown from it.
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
@@ -105,7 +157,11 @@ export const register: Register = on => {
     const idle = await minutes($)
     timer = $.clock.after(idle * 60_000, () => {
       timer = undefined
-      if (!lastWasHandoff) void sendAlert($, idle).catch(() => $.ui.toast('cold-thread-alert: webhook failed.'))
+      if (lastWasHandoff) return
+      void (async () => {
+        if (await isLimited($)) return
+        await sendAlert($, idle)
+      })().catch(() => $.ui.toast('cold-thread-alert: webhook failed.'))
     })
     return result
   })
