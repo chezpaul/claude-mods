@@ -8,6 +8,9 @@ const TITLE = 'Skill updates'
 const STALE_MS = 12 * 60 * 60 * 1000
 // While a zip waits for its upload, how often to look whether claude.ai has synced.
 const SYNC_POLL_MS = 2 * 60 * 1000
+// How often a session looks whether the shared report has gone stale. The
+// report lives in $.store, so whichever thread notices first checks for all.
+const STALE_POLL_MS = 30 * 60 * 1000
 
 // Change the tag when Report's fields change: it declines what an earlier
 // version stored, which outlives a reload.
@@ -38,6 +41,23 @@ async function script($: EngineInterface, args: string[], timeoutMs: number) {
 // Updates still to act on: newer on GitHub, or a built zip still to upload.
 function pending(data: Report | null | undefined) {
   return data?.items.filter(i => i.status === 'outdated').length ?? 0
+}
+
+// An update is named by its item and the upstream commit or version it would bring.
+function updateKeys(data: Report | null | undefined) {
+  return (data?.items ?? []).filter(i => i.status === 'outdated').map(i => `${i.id}@${i.remoteSha ?? i.remoteVersion ?? ''}`)
+}
+
+// Checks GitHub only when no thread has checked within STALE_MS; otherwise
+// takes the report another thread stored.
+async function checkIfStale($: EngineInterface) {
+  const stored = (await $.store.get('report')) as Report | undefined
+  if (stored && Array.isArray(stored.items) && Date.now() - stored.checkedAt < STALE_MS) {
+    const shown = await read($, report)
+    if (!shown || shown.checkedAt < stored.checkedAt) await update($, report, () => stored)
+    return
+  }
+  await check($)
 }
 
 async function check($: EngineInterface) {
@@ -135,12 +155,17 @@ export const register: Register = on => {
       )
       await update($, zips, () => zipsNow)
     }
-    // The pane shows up only when the last check found updates; this start's
-    // check runs in the background and its result decides the next start.
-    if (pending(stored) > 0) void $.ui.open({ id: PANE, title: TITLE })
-    // Every start checks again: the stored report only fills the pane until then.
-    $.clock.after(1_000, () => void check($))
-    $.clock.every(STALE_MS, () => void check($))
+    // The pane pops up once per update: only when the last check found an
+    // update no earlier thread has announced. /skill-updates opens it any time.
+    const keys = updateKeys(stored)
+    // Before 0.2.0 nothing was recorded; what was pending then has been seen.
+    const seen = (await $.store.get('announced')) as string[] | undefined
+    const announced = new Set(seen ?? keys)
+    if (keys.some(k => !announced.has(k))) void $.ui.open({ id: PANE, title: TITLE })
+    await $.store.set('announced', keys)
+    // GitHub is checked once per STALE_MS across all threads, not per thread.
+    $.clock.after(1_000, () => void checkIfStale($))
+    $.clock.every(STALE_POLL_MS, () => void checkIfStale($))
     $.clock.every(SYNC_POLL_MS, () => void pollSync($))
     return started
   })
